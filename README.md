@@ -22,7 +22,7 @@ Stack: Next.js (App Router) · Supabase (Postgres + Realtime) · Vercel.
 
 ## Data
 Who used which machine (name, room, start, end) is stored in the `usage_log` table.
-It is not readable with the public key — view it in Supabase → Table Editor.
+The full history is not readable with the public key (view it in Supabase → Table Editor). The master board does show the name and room of whoever is using a machine right now.
 
 ## Notes
 - Anyone with a machine's QR can mark it free (trust-based, fine for a hostel).

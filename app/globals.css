@@ -38,6 +38,7 @@ a { color: var(--accent); }
 .timer.free { color: var(--free); font-size: 1.2rem; }
 .timer.out_of_order { color: var(--off); font-size: 1.2rem; }
 .timer small { font-size: .8rem; font-weight: 400; color: var(--muted); }
+.who { margin-top: 6px; font-size: .9rem; color: var(--muted); }
 .big { font-size: 3rem; text-align: center; margin: 12px 0; }
 label { display: block; font-size: .85rem; color: var(--muted); margin: 14px 0 4px; }
 input[type=text], input[type=number] { width: 100%; padding: 12px; font-size: 1rem; border-radius: 10px;

@@ -21,17 +21,19 @@ create index if not exists usage_log_machine_idx on usage_log (machine_id, start
 
 -- Row Level Security: the public (anon) key can READ machines, but all writes
 -- go through the functions below. usage_log (names + rooms) is NOT readable
--- by the public key; view it in the Supabase dashboard Table Editor.
+-- by the public key (only the CURRENT user's name + room is exposed via
+-- get_machines, for the master board); view full history in the Table Editor.
 alter table machines  enable row level security;
 alter table usage_log enable row level security;
 
 drop policy if exists "machines readable" on machines;
 create policy "machines readable" on machines for select using (true);
 
--- Machine list with server-computed seconds_left (avoids phone clock problems)
+-- Machine list with server-computed seconds_left (avoids phone clock problems).
+-- Also returns the current user's name + room, shown on the master board.
 create or replace function get_machines(p_floor int default null)
-returns table (id text, name text, floor int, status text, seconds_left int)
-language sql stable as $$
+returns table (id text, name text, floor int, status text, seconds_left int, user_name text, room_no text)
+language sql stable security definer set search_path = public as $$
   select m.id, m.name, m.floor,
     case
       when m.status = 'out_of_order' then 'out_of_order'
@@ -42,8 +44,17 @@ language sql stable as $$
       when m.status = 'in_use' and m.free_at > now()
         then ceil(extract(epoch from (m.free_at - now())))::int
       else 0
-    end
+    end,
+    u.user_name,
+    u.room_no
   from machines m
+  left join lateral (
+    select l.user_name, l.room_no
+    from usage_log l
+    where l.machine_id = m.id and l.ended_at is null
+    order by l.started_at desc
+    limit 1
+  ) u on (m.status = 'in_use' and m.free_at > now())
   where p_floor is null or m.floor = p_floor
   order by m.floor, m.name;
 $$;

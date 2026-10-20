@@ -54,7 +54,12 @@ function Board() {
                       <span className={'badge ' + status}>{LABEL[status]}</span>
                     </div>
                     {status === 'in_use' ? (
-                      <div className="timer">{fmt(left)} <small>left</small></div>
+                      <>
+                        <div className="timer">{fmt(left)} <small>left</small></div>
+                        {m.user_name && (
+                          <div className="who">👤 {m.user_name} · Room {m.room_no}</div>
+                        )}
+                      </>
                     ) : (
                       <div className={'timer ' + status}>{status === 'free' ? 'Available now' : 'Not working'}</div>
                     )}
