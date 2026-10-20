@@ -29,21 +29,23 @@ try {
 
 const SB_URL = env.NEXT_PUBLIC_SUPABASE_URL;
 const SB_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!SB_URL || !SB_KEY) {
-  console.error('Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY.\nCreate .env.local from .env.example first.');
-  process.exit(1);
-}
 
-const res = await fetch(`${SB_URL}/rest/v1/machines?select=id,name,floor&order=floor,name`, {
-  headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
-});
-if (!res.ok) {
-  console.error('Could not load machines from Supabase:', res.status, await res.text());
-  process.exit(1);
+// Machines come from Supabase; if that is unreachable, fall back to scripts/machines.json
+let machines = [];
+try {
+  if (!SB_URL || !SB_KEY) throw new Error('Supabase env vars missing');
+  const res = await fetch(`${SB_URL}/rest/v1/machines?select=id,name,floor&order=floor,name`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Supabase returned ${res.status}`);
+  machines = await res.json();
+  console.log(`Loaded ${machines.length} machines from Supabase`);
+} catch (e) {
+  console.warn(`Could not load machines from Supabase (${e.message}). Using scripts/machines.json`);
+  machines = JSON.parse(fs.readFileSync(path.join('scripts', 'machines.json'), 'utf8'));
 }
-const machines = await res.json();
 if (!machines.length) {
-  console.error('No machines found. Run supabase/schema.sql first.');
+  console.error('No machines found.');
   process.exit(1);
 }
 

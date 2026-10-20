@@ -47,7 +47,7 @@ function Board() {
             {byFloor[f].map((m) => {
               const { status, left } = live(m, now);
               return (
-                <Link key={m.id} href={`/machine/${m.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <div key={m.id}>
                   <div className="card">
                     <div className="mrow">
                       <span className="mname">{m.name}</span>
@@ -59,7 +59,7 @@ function Board() {
                       <div className={'timer ' + status}>{status === 'free' ? 'Available now' : 'Not working'}</div>
                     )}
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -67,7 +67,7 @@ function Board() {
       ))}
 
       {!loading && !error && shown.length === 0 && <p className="sub">No machines found.</p>}
-      <p className="foot">Updates live. Scan the QR on a machine to start or free it.</p>
+      <p className="foot">View only. Scan the QR on a machine to start its timer.</p>
     </>
   );
 }
