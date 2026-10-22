@@ -1,85 +1,238 @@
 'use client';
-import { Suspense } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMachines, useNow, live } from '../lib/hooks';
-import { fmt, floorLabel } from '../lib/format';
+import { mmss, floorLabel } from '../lib/format';
+import Water from '../components/Water';
+import Digits from '../components/Digits';
+import { CheckIcon, DrumIcon, WrenchIcon, LogoIcon, BellIcon } from '../components/Icons';
 
-const LABEL = { free: 'Free', in_use: 'In use', out_of_order: 'Out of order' };
+const pill = { position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px 0 8px', borderRadius: 999, background: 'var(--pill-bg)', fontSize: 12, fontWeight: 600 };
+
+function Skeleton({ w, h, r = 999 }) {
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', width: w, height: h, borderRadius: r, background: 'var(--line)' }}>
+      <span data-motion="" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)', animation: 'hl-shim 1.4s linear infinite' }} />
+    </div>
+  );
+}
+
+function MachineCard({ m, status, left, flashCount }) {
+  const fc = flashCount || 0;
+  const totalS = m.total || Math.max(left, 25 * 60);
+  const bar = status === 'in_use' ? Math.max(0, Math.min(1, 1 - left / totalS)) : 0;
+  const bg = status === 'free' ? 'var(--mint)' : status === 'in_use' ? 'var(--peri)' : 'var(--ooo)';
+  const who = m.user_name ? `${m.user_name} · Room ${m.room_no}` : '';
+  const aria = `${m.name}, ${status === 'in_use' ? `in use${who ? ' by ' + who : ''}, ${mmss(left)} left` : status === 'out_of_order' ? 'out of order' : 'free'}`;
+  return (
+    <div aria-label={aria} style={{ position: 'relative', overflow: 'hidden', minHeight: 150, borderRadius: 26, padding: 16, background: bg, transition: 'background-color 600ms ease-out', animation: fc ? `hl-wash${fc % 2} 800ms ease-out` : 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+      <span data-motion="" key={'s' + fc} style={{ position: 'absolute', inset: 0, background: 'linear-gradient(100deg,transparent 25%,rgba(255,255,255,.75) 50%,transparent 75%)', transform: 'translateX(-120%)', animation: fc ? `hl-sweep${fc % 2} 900ms ease-out` : 'none', pointerEvents: 'none' }} />
+      <span style={{ position: 'relative', fontSize: 17, fontWeight: 700, letterSpacing: '-.01em' }}>{m.name}</span>
+      {status === 'free' && (
+        <>
+          <span style={{ ...pill, color: 'var(--mint-ink)' }}><CheckIcon />Free</span>
+          <span style={{ position: 'relative', marginTop: 'auto', fontSize: 15, fontWeight: 600 }}>Available now</span>
+        </>
+      )}
+      {status === 'in_use' && (
+        <>
+          <span style={{ ...pill, color: 'var(--peri-ink)' }}><DrumIcon />In use</span>
+          <div aria-hidden="true" style={{ position: 'relative', fontSize: 28, fontWeight: 700, letterSpacing: '-.03em', display: 'flex', lineHeight: 1 }}>
+            <Digits value={mmss(left)} />
+          </div>
+          {who && <span style={{ position: 'relative', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)', lineHeight: 1.3 }}>{who}</span>}
+          <span style={{ position: 'relative', display: 'block', width: '100%', height: 6, borderRadius: 999, background: 'var(--pill-bg)', overflow: 'hidden', marginTop: 'auto' }}>
+            <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,#ABA3F6,#6A5FE2)', transformOrigin: 'left', transform: `scaleX(${bar.toFixed(3)})`, transition: 'transform 1s linear' }} />
+          </span>
+        </>
+      )}
+      {status === 'out_of_order' && (
+        <>
+          <span style={{ ...pill, color: 'var(--ooo-ink)' }}><WrenchIcon />Out of order</span>
+          <span style={{ position: 'relative', marginTop: 'auto', fontSize: 15, fontWeight: 600, color: 'var(--ooo-ink)' }}>Not working</span>
+        </>
+      )}
+    </div>
+  );
+}
 
 function Board() {
   const params = useSearchParams();
-  const floorParam = params.get('floor');
-  const floor = floorParam && !Number.isNaN(Number(floorParam)) ? Number(floorParam) : null;
-
-  // Always load all machines so we can show the floor chips; filter locally.
-  const { machines, loading, error } = useMachines(null);
+  const { machines, loading, error, refresh } = useMachines(null);
   const now = useNow();
 
-  const floors = [...new Set(machines.map((m) => m.floor))].sort((a, b) => a - b);
-  const shown = machines.filter((m) => floor === null || m.floor === floor);
-  const byFloor = shown.reduce((acc, m) => ((acc[m.floor] ||= []).push(m), acc), {});
+  const [picked, setPicked] = useState(null);
+  const [xf, setXf] = useState(0);
+  const [toast, setToast] = useState('');
+  const [flash, setFlash] = useState({});
+  const prevSt = useRef({});
 
-  const freeCount = shown.filter((m) => live(m, now).status === 'free').length;
+  const floors = [...new Set(machines.map((m) => m.floor))].sort((a, b) => a - b);
+  const fp = params.get('floor');
+  const req = fp !== null && fp !== '' && !Number.isNaN(Number(fp)) ? Number(fp) : null;
+  const active = picked !== null && floors.includes(picked) ? picked : req !== null && floors.includes(req) ? req : floors[0];
+
+  const rows = machines.filter((m) => m.floor === active).map((m) => ({ m, ...live(m, now) }));
+  const free = rows.filter((r) => r.status === 'free').length;
+  const total = rows.length;
+
+  function pickFloor(f) {
+    if (f === active) return;
+    setPicked(f);
+    setXf((x) => x + 1);
+    try { window.history.replaceState(null, '', `/?floor=${f}`); } catch {}
+  }
+
+  // "Thanks, machine is free again" message after freeing a machine
+  useEffect(() => {
+    let t;
+    try {
+      const msg = sessionStorage.getItem('wm_toast');
+      if (msg) {
+        sessionStorage.removeItem('wm_toast');
+        setToast(msg);
+        t = setTimeout(() => setToast(''), 3400);
+      }
+    } catch {}
+    return () => clearTimeout(t);
+  }, []);
+
+  // flash a card when its status changes
+  useEffect(() => {
+    const st = {};
+    let changed = null;
+    for (const m of machines) {
+      const s = live(m, now).status;
+      st[m.id] = s;
+      if (prevSt.current[m.id] && prevSt.current[m.id] !== s) (changed = changed || {})[m.id] = true;
+    }
+    prevSt.current = st;
+    if (changed) setFlash((f) => { const n = { ...f }; for (const k in changed) n[k] = (n[k] || 0) + 1; return n; });
+  }, [machines, now]);
+
+  const isLoading = loading && !machines.length;
+  const isError = !!error && !machines.length;
+  const isEmpty = !isLoading && !isError && !total;
+  const isLive = !isLoading && !isError && !isEmpty;
+  const n = Math.max(1, floors.length);
+  const idx = Math.max(0, floors.indexOf(active));
+
+  const water = isError
+    ? { h: 200, level: 0.3, mode: 'flat', mood: 'sleepy', size: 96, label: '' }
+    : { h: 180, level: isLive ? free / Math.max(1, total) : 0.2, mode: 'calm', mood: 'relax', size: 92, label: isLive ? `${free} free` : '' };
 
   return (
-    <>
-      <h1>🧺 Hostel Laundry</h1>
-      <p className="sub">
-        {loading ? 'Loading…' : `${freeCount} of ${shown.length} machines free${floor !== null ? ` on ${floorLabel(floor).toLowerCase()}` : ''}`}
-      </p>
+    <div className="app">
+      <div style={{ paddingBottom: 130 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 'max(24px, calc(env(safe-area-inset-top) + 12px)) 20px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 12, background: 'var(--nav)', color: 'var(--nav-ink)', display: 'grid', placeItems: 'center' }}><LogoIcon /></div>
+            <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.01em' }}>Hostel Laundry</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Link href="/reminders" aria-label="Wash reminders" className="pressable focusable" style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--surface)', boxShadow: 'var(--shadow)', display: 'grid', placeItems: 'center', color: 'var(--ink)' }}><BellIcon size={17} /></Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 14px', borderRadius: 999, background: 'var(--surface)', boxShadow: 'var(--shadow)', fontSize: 13, fontWeight: 600 }}>
+              <span style={{ position: 'relative', width: 8, height: 8 }}>
+                <span data-motion="" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#3FBF8A', animation: 'hl-pulse 2.4s ease-out infinite' }} />
+                <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#3FBF8A' }} />
+              </span>
+              Live
+            </div>
+          </div>
+        </div>
 
-      <div className="chips">
-        <Link href="/" className={'chip' + (floor === null ? ' on' : '')}>All floors</Link>
-        {floors.map((f) => (
-          <Link key={f} href={`/?floor=${f}`} className={'chip' + (floor === f ? ' on' : '')}>
-            {floorLabel(f)}
-          </Link>
-        ))}
+        {isLive && (
+          <div style={{ padding: '28px 20px 0' }}>
+            <div aria-label={`${free} of ${total} machines free`} style={{ display: 'flex', alignItems: 'baseline', gap: 14, fontSize: 72, fontWeight: 700, letterSpacing: '-.045em', lineHeight: 1 }}>
+              <Digits value={String(free)} digitW=".56em" />
+              <span style={{ fontSize: '.5em', fontWeight: 600, color: 'var(--ink-2)', letterSpacing: '-.02em' }}>of {total}</span>
+            </div>
+            <p style={{ margin: '10px 0 0', fontSize: 16, fontWeight: 500, color: 'var(--ink-2)' }}>machines free on {floorLabel(active).toLowerCase()}</p>
+          </div>
+        )}
+        {isLoading && (
+          <div style={{ padding: '30px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }} aria-label="Loading machines">
+            <Skeleton w={190} h={64} r={22} />
+            <Skeleton w={240} h={18} />
+          </div>
+        )}
+        {isError && (
+          <div role="alert" style={{ padding: '30px 20px 0' }}>
+            <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.05, fontWeight: 700, letterSpacing: '-.03em' }}>Can't reach the laundry room</h1>
+            <p style={{ margin: '12px 0 0', fontSize: 16, fontWeight: 500, color: 'var(--ink-2)' }}>Check your Wi‑Fi and give it another go.</p>
+          </div>
+        )}
+        {isEmpty && (
+          <div style={{ padding: '30px 20px 0' }}>
+            <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.05, fontWeight: 700, letterSpacing: '-.03em' }}>No machines yet</h1>
+            <p style={{ margin: '12px 0 0', fontSize: 16, fontWeight: 500, color: 'var(--ink-2)' }}>Nothing on the board. Check back soon.</p>
+          </div>
+        )}
+
+        <div style={{ marginTop: 84 }}>
+          <Water height={water.h} level={water.level} mode={water.mode} mood={water.mood} spriteX="72%" spriteSize={water.size} label={water.label} minFill={0.12} maxFill={0.6} />
+        </div>
+
+        <div style={{ position: 'relative', marginTop: -34, borderRadius: '32px 32px 0 0', background: 'var(--bg)', padding: '22px 16px 0', minHeight: 420 }}>
+          {isLive && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px 14px' }}>
+                <span style={{ fontSize: 15, fontWeight: 700 }}>Machines</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>Updates on its own</span>
+              </div>
+              <div data-motion="" key={active} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, animation: xf ? `hl-xf${xf % 2} 320ms ease-out both` : 'none' }}>
+                {rows.map(({ m, status, left }) => (
+                  <MachineCard key={m.id} m={m} status={status} left={left} flashCount={flash[m.id]} />
+                ))}
+              </div>
+              <p style={{ margin: '22px 4px 0', textAlign: 'center', fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>View only. Scan the QR on a machine to start your wash.</p>
+            </>
+          )}
+          {isLoading && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, paddingTop: 34 }}>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} style={{ position: 'relative', overflow: 'hidden', height: 150, borderRadius: 26, background: 'var(--field)' }}>
+                  <div style={{ position: 'absolute', left: 16, top: 16, width: 84, height: 16, borderRadius: 999, background: 'var(--line)' }} />
+                  <div style={{ position: 'absolute', left: 16, top: 44, width: 58, height: 24, borderRadius: 999, background: 'var(--line)' }} />
+                  <div style={{ position: 'absolute', left: 16, bottom: 18, width: 100, height: 14, borderRadius: 999, background: 'var(--line)' }} />
+                  <span data-motion="" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent)', animation: 'hl-shim 1.4s linear infinite' }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {isError && (
+            <div style={{ padding: '60px 4px 0' }}>
+              <button type="button" onClick={refresh} className="pressable" style={{ width: '100%', height: 58, borderRadius: 999, border: 0, background: 'var(--nav)', color: 'var(--nav-ink)', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>Try again</button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {error && <div className="err">{error}</div>}
+      {toast && (
+        <div role="status" data-motion="" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 40px)', maxWidth: 390, bottom: 106, zIndex: 6, padding: '15px 20px', borderRadius: 22, background: 'var(--nav)', color: 'var(--nav-ink)', fontSize: 14, fontWeight: 600, textAlign: 'center', animation: 'hl-toast 300ms cubic-bezier(.2,.8,.2,1) both' }}>{toast}</div>
+      )}
 
-      {Object.keys(byFloor).map((f) => (
-        <section key={f}>
-          <h2>{floorLabel(f)}</h2>
-          <div className="grid">
-            {byFloor[f].map((m) => {
-              const { status, left } = live(m, now);
-              return (
-                <div key={m.id}>
-                  <div className="card">
-                    <div className="mrow">
-                      <span className="mname">{m.name}</span>
-                      <span className={'badge ' + status}>{LABEL[status]}</span>
-                    </div>
-                    {status === 'in_use' ? (
-                      <>
-                        <div className="timer">{fmt(left)} <small>left</small></div>
-                        {m.user_name && (
-                          <div className="who">👤 {m.user_name} · Room {m.room_no}</div>
-                        )}
-                      </>
-                    ) : (
-                      <div className={'timer ' + status}>{status === 'free' ? 'Available now' : 'Not working'}</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+      {floors.length > 0 && (
+        <nav aria-label="Floors" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: 398, bottom: 'max(24px, env(safe-area-inset-bottom))', zIndex: 5, height: 68, padding: 6, borderRadius: 999, background: 'var(--surface)', boxShadow: 'var(--shadow)' }}>
+          <div style={{ position: 'absolute', top: 6, bottom: 6, left: 6, width: `calc((100% - 12px) / ${n})`, borderRadius: 999, background: 'var(--nav)', transform: `translateX(${idx * 100}%)`, transition: 'transform 520ms cubic-bezier(.34,1.56,.64,1)' }} />
+          <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${n}, 1fr)`, height: '100%' }}>
+            {floors.map((f) => (
+              <button key={f} type="button" onClick={() => pickFloor(f)} aria-current={f === active ? 'page' : undefined} aria-label={floorLabel(f)} className="focusable"
+                style={{ border: 0, background: 'transparent', borderRadius: 999, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: f === active ? 'var(--nav-ink)' : 'var(--ink-2)', transition: 'color 260ms ease-out' }}>
+                {f === 0 ? 'Ground' : `Floor ${f}`}
+              </button>
+            ))}
           </div>
-        </section>
-      ))}
-
-      {!loading && !error && shown.length === 0 && <p className="sub">No machines found.</p>}
-      <p className="foot">View only. Scan the QR on a machine to start its timer.<br /><Link href="/reminders">🔔 Get wash reminders</Link></p>
-    </>
+        </nav>
+      )}
+    </div>
   );
 }
 
 export default function Home() {
   return (
-    <Suspense fallback={<p className="sub">Loading…</p>}>
+    <Suspense fallback={<div className="app" />}>
       <Board />
     </Suspense>
   );

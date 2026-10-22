@@ -8,14 +8,20 @@ export const metadata = {
   appleWebApp: { capable: true, title: 'Laundry', statusBarStyle: 'default' },
 };
 
-export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#6b5cff' };
+export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#8379EE' };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>
-        <main className="wrap">{children}</main>
-      </body>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }

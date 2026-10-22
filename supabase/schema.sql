@@ -31,9 +31,9 @@ drop policy if exists "machines readable" on machines;
 create policy "machines readable" on machines for select using (true);
 
 -- Machine list with server-computed seconds_left (avoids phone clock problems).
--- Also returns the current user's name + room, shown on the master board.
+-- Also returns the current user's name + room and the wash length (for the master board).
 create or replace function get_machines(p_floor int default null)
-returns table (id text, name text, floor int, status text, seconds_left int, user_name text, room_no text)
+returns table (id text, name text, floor int, status text, seconds_left int, user_name text, room_no text, total_seconds int)
 language sql stable security definer set search_path = public as $$
   select m.id, m.name, m.floor,
     case
@@ -47,10 +47,12 @@ language sql stable security definer set search_path = public as $$
       else 0
     end,
     u.user_name,
-    u.room_no
+    u.room_no,
+    case when u.expected_end is null then 0
+         else round(extract(epoch from (u.expected_end - u.started_at)))::int end
   from machines m
   left join lateral (
-    select l.user_name, l.room_no
+    select l.user_name, l.room_no, l.started_at, l.expected_end
     from usage_log l
     where l.machine_id = m.id and l.ended_at is null
     order by l.started_at desc

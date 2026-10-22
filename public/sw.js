@@ -13,7 +13,9 @@ self.addEventListener('push', (event) => {
       badge: '/icon-192.png',
       tag: data.tag || 'laundry',
       renotify: true,
-      vibrate: [200, 100, 200],
+      silent: false,
+      requireInteraction: true,
+      vibrate: [300, 150, 300, 150, 600],
       data: { url: data.url || '/' },
     })
   );
