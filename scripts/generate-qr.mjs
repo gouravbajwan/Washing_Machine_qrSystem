@@ -2,7 +2,7 @@
 //   node scripts/generate-qr.mjs https://your-app.vercel.app
 //
 // Output:
-//   qr-codes/master/    -> master-all-floors.png + master-floor-<n>.png
+//   qr-codes/master/    -> master-all-floors.png + master-floor-<n>.png (master-ground-floor.png for floor 0)
 //   qr-codes/machines/  -> one PNG per washing machine (<machine-id>.png)
 //
 // Machines are read from your Supabase project, using the values in .env.local
@@ -59,7 +59,7 @@ const opts = { width: 800, margin: 3, errorCorrectionLevel: 'M' };
 await QRCode.toFile(path.join(masterDir, 'master-all-floors.png'), `${base}/`, opts);
 const floors = [...new Set(machines.map((m) => m.floor))].sort((a, b) => a - b);
 for (const f of floors) {
-  await QRCode.toFile(path.join(masterDir, `master-floor-${f}.png`), `${base}/?floor=${f}`, opts);
+  await QRCode.toFile(path.join(masterDir, `master-${f === 0 ? 'ground-floor' : 'floor-' + f}.png`), `${base}/?floor=${f}`, opts);
 }
 for (const m of machines) {
   await QRCode.toFile(path.join(machineDir, `${m.id}.png`), `${base}/machine/${m.id}`, opts);

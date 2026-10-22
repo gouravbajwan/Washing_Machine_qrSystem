@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMachines, useNow, live } from '../lib/hooks';
-import { fmt } from '../lib/format';
+import { fmt, floorLabel } from '../lib/format';
 
 const LABEL = { free: 'Free', in_use: 'In use', out_of_order: 'Out of order' };
 
@@ -26,14 +26,14 @@ function Board() {
     <>
       <h1>🧺 Hostel Laundry</h1>
       <p className="sub">
-        {loading ? 'Loading…' : `${freeCount} of ${shown.length} machines free${floor !== null ? ` on floor ${floor}` : ''}`}
+        {loading ? 'Loading…' : `${freeCount} of ${shown.length} machines free${floor !== null ? ` on ${floorLabel(floor).toLowerCase()}` : ''}`}
       </p>
 
       <div className="chips">
         <Link href="/" className={'chip' + (floor === null ? ' on' : '')}>All floors</Link>
         {floors.map((f) => (
           <Link key={f} href={`/?floor=${f}`} className={'chip' + (floor === f ? ' on' : '')}>
-            Floor {f}
+            {floorLabel(f)}
           </Link>
         ))}
       </div>
@@ -42,7 +42,7 @@ function Board() {
 
       {Object.keys(byFloor).map((f) => (
         <section key={f}>
-          <h2>Floor {f}</h2>
+          <h2>{floorLabel(f)}</h2>
           <div className="grid">
             {byFloor[f].map((m) => {
               const { status, left } = live(m, now);

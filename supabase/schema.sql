@@ -91,8 +91,9 @@ begin
           or (lower(trim(l.user_name)) = lower(trim(p_name)) and lower(trim(l.room_no)) = lower(trim(p_room))) )
   limit 1;
   if found then
-    raise exception 'You are already using % (floor %). Free it before starting another machine.',
-      v_other.machine_name, v_other.machine_floor;
+    raise exception 'You are already using % (%). Free it before starting another machine.',
+      v_other.machine_name,
+      case when v_other.machine_floor = 0 then 'ground floor' else 'floor ' || v_other.machine_floor end;
   end if;
 
   v_end := now() + make_interval(mins => p_minutes);

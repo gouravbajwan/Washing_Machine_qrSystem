@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useMachines } from '../../lib/hooks';
+import { floorLabel } from '../../lib/format';
 
 // Printable QR codes: one per machine + one per floor + one for all floors.
 export default function QrSheet() {
@@ -13,9 +14,9 @@ export default function QrSheet() {
     const origin = window.location.origin;
     const floors = [...new Set(machines.map((m) => m.floor))].sort((a, b) => a - b);
     const list = [
-      ...floors.map((f) => ({ key: 'floor-' + f, title: `Floor ${f} availability`, sub: 'Master QR', url: `${origin}/?floor=${f}` })),
+      ...floors.map((f) => ({ key: 'floor-' + f, title: `${floorLabel(f)} availability`, sub: 'Master QR', url: `${origin}/?floor=${f}` })),
       { key: 'all', title: 'All floors', sub: 'Master QR', url: `${origin}/` },
-      ...machines.map((m) => ({ key: m.id, title: m.name, sub: `Floor ${m.floor} · machine QR`, url: `${origin}/machine/${m.id}` })),
+      ...machines.map((m) => ({ key: m.id, title: m.name, sub: `${floorLabel(m.floor)} · machine QR`, url: `${origin}/machine/${m.id}` })),
     ];
     Promise.all(list.map(async (i) => ({ ...i, img: await QRCode.toDataURL(i.url, { width: 400, margin: 2 }) }))).then(setItems);
   }, [machines]);

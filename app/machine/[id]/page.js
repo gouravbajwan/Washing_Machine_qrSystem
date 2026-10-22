@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabase';
 import { useMachines, useNow, live } from '../../../lib/hooks';
-import { fmt } from '../../../lib/format';
+import { fmt, floorLabel } from '../../../lib/format';
 import { getDeviceId } from '../../../lib/device';
 
-const PRESETS = [30, 45, 60, 90];
+const PRESETS = [15, 25, 35];
 
 export default function MachinePage() {
   const { id } = useParams();
@@ -16,7 +16,7 @@ export default function MachinePage() {
 
   const [name, setName] = useState('');
   const [room, setRoom] = useState('');
-  const [minutes, setMinutes] = useState(45);
+  const [minutes, setMinutes] = useState(25);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // {type:'ok'|'err', text}
 
@@ -82,7 +82,7 @@ export default function MachinePage() {
   return (
     <>
       <h1>{machine.name}</h1>
-      <p className="sub">Floor {machine.floor}</p>
+      <p className="sub">{floorLabel(machine.floor)}</p>
 
       <div className="card">
         {status === 'in_use' && (
@@ -107,7 +107,7 @@ export default function MachinePage() {
           <>
             <span className="badge free">Free</span>
             <div className="err">
-              You’re already using <b>{mine.machine_name}</b> (floor {mine.machine_floor}), about{' '}
+              You’re already using <b>{mine.machine_name}</b> ({floorLabel(mine.machine_floor).toLowerCase()}), about{' '}
               {Math.max(1, Math.ceil(mine.seconds_left / 60))} min left. Finish or free it before starting another machine.
             </div>
             <Link href={`/machine/${mine.machine_id}`}>Go to {mine.machine_name} →</Link>
@@ -141,7 +141,7 @@ export default function MachinePage() {
       </div>
 
       {msg && <div className={msg.type}>{msg.text}</div>}
-      <p className="foot"><Link href={`/?floor=${machine.floor}`}>See all machines on floor {machine.floor} →</Link></p>
+      <p className="foot"><Link href={`/?floor=${machine.floor}`}>See all machines on {floorLabel(machine.floor).toLowerCase()} →</Link></p>
     </>
   );
 }
