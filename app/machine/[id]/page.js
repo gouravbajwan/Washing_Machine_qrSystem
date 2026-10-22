@@ -59,7 +59,7 @@ export default function MachinePage() {
   async function free() {
     setMsg(null);
     setBusy(true);
-    const { error } = await supabase.rpc('free_machine', { p_machine: id });
+    const { error } = await supabase.rpc('free_machine', { p_machine: id, p_device: getDeviceId() });
     setBusy(false);
     setMsg(error ? { type: 'err', text: error.message } : { type: 'ok', text: 'Machine marked as free.' });
     refresh();
@@ -90,9 +90,16 @@ export default function MachinePage() {
             <div className="mrow"><span className="badge in_use">In use</span></div>
             <div className="big">{fmt(left)}</div>
             <p className="sub" style={{ textAlign: 'center' }}>until this machine is free</p>
-            <button className="danger" onClick={free} disabled={busy}>
-              I’ve taken my clothes — mark as free
-            </button>
+            {mine && mine.machine_id === id ? (
+              <button className="danger" onClick={free} disabled={busy}>
+                I’ve taken my clothes — mark as free
+              </button>
+            ) : (
+              <p className="sub" style={{ textAlign: 'center' }}>
+                {machine.user_name ? <>In use by <b>{machine.user_name}</b> · Room {machine.room_no}. </> : null}
+                It will become available when the timer ends.
+              </p>
+            )}
           </>
         )}
 
