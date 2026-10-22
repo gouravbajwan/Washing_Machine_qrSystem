@@ -1,11 +1,13 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabase';
 import { useMachines, useNow, live } from '../../../lib/hooks';
 import { fmt, floorLabel } from '../../../lib/format';
 import { getDeviceId } from '../../../lib/device';
+import { enablePush, syncPush, pushStatus } from '../../../lib/push';
+import { beep, buzz } from '../../../lib/alerts';
 
 const PRESETS = [15, 25, 35];
 
@@ -38,10 +40,73 @@ export default function MachinePage() {
   }
   useEffect(() => { loadMine(); }, [machines]);
 
+  // ----- Reminders -----
+  const [push, setPush] = useState('unsupported');
+  const [remind, setRemind] = useState(true);
+  const [banner, setBanner] = useState(null);
+  const alertRef = useRef({ owner: false, endsAt: 0, fired: {}, done: false });
+
+  useEffect(() => {
+    const s = pushStatus();
+    setPush(s);
+    if (s === 'granted') {
+      let n = '', r = '';
+      try { n = localStorage.getItem('wm_name') || ''; r = localStorage.getItem('wm_room') || ''; } catch {}
+      syncPush(n, r);
+    }
+  }, []);
+
+  function fire(text) {
+    setBanner(text);
+    beep();
+    buzz();
+  }
+
+  async function turnOn() {
+    await enablePush(name, room);
+    setPush(pushStatus());
+  }
+
+  // In-page alerts (backup): 5 min, 2 min, and time's up, while this page is open.
+  useEffect(() => {
+    const a = alertRef.current;
+    const m = machines.find((x) => x.id === id);
+    if (!m) return;
+    const lv = live(m, now);
+    const isOwner = lv.status === 'in_use' && mine && mine.machine_id === id;
+
+    if (isOwner) {
+      if (!a.owner || Math.abs(a.endsAt - m.endsAt) > 20000) {
+        a.fired = {};
+        a.done = false;
+        // thresholds already passed when we first see this wash are not announced
+        if (lv.left <= 300) a.fired[300] = true;
+        if (lv.left <= 120) a.fired[120] = true;
+      }
+      a.owner = true;
+      a.endsAt = m.endsAt;
+      if (lv.left <= 300 && !a.fired[300]) { a.fired[300] = true; fire('⏰ 5 minutes left. Get ready to collect your clothes.'); }
+      if (lv.left <= 120 && !a.fired[120]) { a.fired[120] = true; fire('⏳ 2 minutes left. Head over now.'); }
+    } else if (a.owner) {
+      if (Date.now() >= a.endsAt - 1000) {
+        if (!a.done) { a.done = true; fire('✅ Time’s up! Please remove your clothes so others can use the machine.'); }
+        a.owner = false;
+      } else {
+        a.owner = false; // freed early
+      }
+    }
+  }, [now]);
+
   async function start(e) {
     e.preventDefault();
     setMsg(null);
     setBusy(true);
+    if (push === 'default' && remind) {
+      await enablePush(name, room);   // must run right after the tap
+      setPush(pushStatus());
+    } else if (push === 'granted') {
+      await syncPush(name, room);
+    }
     const { error } = await supabase.rpc('start_machine', {
       p_machine: id, p_name: name, p_room: room, p_minutes: Number(minutes), p_device: getDeviceId(),
     });
@@ -61,6 +126,7 @@ export default function MachinePage() {
     setBusy(true);
     const { error } = await supabase.rpc('free_machine', { p_machine: id, p_device: getDeviceId() });
     setBusy(false);
+    if (!error) alertRef.current.owner = false;
     setMsg(error ? { type: 'err', text: error.message } : { type: 'ok', text: 'Machine marked as free.' });
     refresh();
     loadMine();
@@ -81,6 +147,12 @@ export default function MachinePage() {
 
   return (
     <>
+      {banner && (
+        <div className="alertbar" role="alert">
+          <span>{banner}</span>
+          <button type="button" onClick={() => setBanner(null)}>OK</button>
+        </div>
+      )}
       <h1>{machine.name}</h1>
       <p className="sub">{floorLabel(machine.floor)}</p>
 
@@ -91,9 +163,23 @@ export default function MachinePage() {
             <div className="big">{fmt(left)}</div>
             <p className="sub" style={{ textAlign: 'center' }}>until this machine is free</p>
             {mine && mine.machine_id === id ? (
-              <button className="danger" onClick={free} disabled={busy}>
-                I’ve taken my clothes — mark as free
-              </button>
+              <>
+                {push === 'granted' && (
+                  <p className="tip">🔔 Reminders are on. You’ll get a notification 5 min and 2 min before, and when it’s done.</p>
+                )}
+                {push === 'default' && (
+                  <button type="button" className="linkbtn" onClick={turnOn}>🔔 Turn on reminders</button>
+                )}
+                {push === 'needs-install' && (
+                  <p className="tip">📱 Want reminders on iPhone? <Link href="/reminders">See how →</Link> Until then, keep this page open for an alert.</p>
+                )}
+                {push === 'denied' && (
+                  <p className="tip">Notifications are blocked for this site, so you’ll only get an alert while this page is open.</p>
+                )}
+                <button className="danger" onClick={free} disabled={busy}>
+                  I’ve taken my clothes — mark as free
+                </button>
+              </>
             ) : (
               <p className="sub" style={{ textAlign: 'center' }}>
                 {machine.user_name ? <>In use by <b>{machine.user_name}</b> · Room {machine.room_no}. </> : null}
@@ -140,6 +226,15 @@ export default function MachinePage() {
             </div>
             <input type="number" min={1} max={240} value={minutes}
               onChange={(e) => setMinutes(e.target.value)} style={{ marginTop: 8 }} required />
+            {push === 'default' && (
+              <label className="check">
+                <input type="checkbox" checked={remind} onChange={(e) => setRemind(e.target.checked)} />
+                <span>🔔 Remind me 5 min and 2 min before it ends</span>
+              </label>
+            )}
+            {push === 'needs-install' && (
+              <p className="tip">📱 iPhone: want reminders? <Link href="/reminders">See how →</Link></p>
+            )}
             <button className="primary" disabled={busy}>
               {busy ? 'Starting…' : 'Start timer'}
             </button>

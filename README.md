@@ -28,3 +28,18 @@ The full history is not readable with the public key (view it in Supabase → Ta
 - Anyone with a machine's QR can mark it free (trust-based, fine for a hostel).
 - Mark a machine broken: `update machines set status='out_of_order' where id='f3-w2';`
 - Add a machine: `insert into machines (id,name,floor) values ('f3-w3','Washer 3',3);` then reprint `/qr`.
+
+## Wash reminders (push notifications)
+Alerts at ~5 min left, ~2 min left and when the wash is done. Works with the phone locked.
+Also shows an in-page banner + beep/vibration while the machine page is open (backup).
+
+One-time setup:
+1. Generate keys on your PC: `npm run vapid` (prints a public and a private key).
+2. Vercel > Settings > Environment Variables: add `NEXT_PUBLIC_VAPID_PUBLIC_KEY` = the public key (also add it to `.env.local`). Redeploy.
+3. Supabase > SQL Editor: run `supabase/migration_notifications.sql`.
+4. Supabase > Edge Functions > Deploy a new function named `send-reminders` (via the editor), paste `supabase/functions/send-reminders/index.ts`, deploy.
+5. Supabase > Edge Functions > Secrets: add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (e.g. `mailto:you@example.com`).
+
+Notes: Android works straight from Chrome. iPhones must first use Share > Add to Home Screen and enable reminders
+inside the installed app (`/reminders` page), then start washes using the same name and room number.
+Reminders are matched to the person by device and by name + room number.

@@ -72,7 +72,7 @@ function Board() {
       ))}
 
       {!loading && !error && shown.length === 0 && <p className="sub">No machines found.</p>}
-      <p className="foot">View only. Scan the QR on a machine to start its timer.</p>
+      <p className="foot">View only. Scan the QR on a machine to start its timer.<br /><Link href="/reminders">🔔 Get wash reminders</Link></p>
     </>
   );
 }
