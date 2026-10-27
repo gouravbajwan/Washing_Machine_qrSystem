@@ -9,7 +9,7 @@ import { getDeviceId } from '../../../lib/device';
 import { enablePush, syncPush, pushStatus } from '../../../lib/push';
 import { beep, buzz } from '../../../lib/alerts';
 import { getWash, setWash, clearWash } from '../../../lib/wash';
-import { LoadingScreen, MessageScreen, FreeScreen, TimerScreen, StartedScreen, FinishedScreen, OooScreen, validateForm } from '../../../components/MachineScreens';
+import { LoadingScreen, MessageScreen, FreeScreen, TimerScreen, FinishedScreen, OooScreen, validateForm } from '../../../components/MachineScreens';
 
 const note = { fontSize: 14, fontWeight: 500, lineHeight: 1.4, color: 'var(--ink-2)' };
 
@@ -31,7 +31,6 @@ export default function MachinePage() {
   const [push, setPush] = useState('unsupported');
   const [remind, setRemind] = useState(true);
   const [banner, setBanner] = useState(null);
-  const [startInfo, setStartInfo] = useState(null);
   const [wash, setWashState] = useState(null);
   const alertRef = useRef({ owner: false, endsAt: 0, fired: {}, done: false });
 
@@ -113,7 +112,6 @@ export default function MachinePage() {
     const endsAt = Date.now() + minutes * 60000;
     setWash({ id, endsAt });
     setWashState({ id, endsAt });
-    setStartInfo({ mins: minutes, endsAt });
     refresh(); loadMine();
     return true;
   }
@@ -163,9 +161,6 @@ export default function MachinePage() {
   const { status, left } = live(machine, now);
   const seeFloor = () => router.push('/?floor=' + machine.floor);
 
-  if (startInfo) {
-    return wrap(<StartedScreen machine={machine} mins={startInfo.mins} endsAtMs={startInfo.endsAt} onSeeTimer={() => setStartInfo(null)} />);
-  }
   if (status === 'out_of_order') return wrap(<OooScreen machine={machine} onSeeFloor={seeFloor} />);
 
   if (status === 'in_use') {
