@@ -138,6 +138,23 @@ export default function MachinePage() {
     return true;
   }
 
+  async function doReport(reason) {
+    const { error } = await supabase.rpc('report_machine', { p_machine: id, p_reason: reason, p_device: getDeviceId() });
+    if (error) return error.message;
+    clearWash(); setWashState(null);
+    await refresh(); loadMine();
+    setBanner('Thanks. This machine is now marked out of service.');
+    return null;
+  }
+
+  async function doRestore() {
+    const { error } = await supabase.rpc('restore_machine', { p_machine: id, p_device: getDeviceId() });
+    if (error) return error.message;
+    await refresh();
+    setBanner('Marked as available. Thanks for checking.');
+    return null;
+  }
+
   const toastBar = banner && (
     <div role="alert" style={{ position: 'fixed', top: 'max(12px, env(safe-area-inset-top))', left: 12, right: 12, zIndex: 50, maxWidth: 406, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 12px 12px 16px', borderRadius: 22, background: 'var(--nav)', color: 'var(--nav-ink)', boxShadow: 'var(--shadow)', fontSize: 14, fontWeight: 600, animation: 'toast 300ms ease-out' }}>
       <span style={{ flex: 1 }}>{banner}</span>
@@ -161,7 +178,7 @@ export default function MachinePage() {
   const { status, left } = live(machine, now);
   const seeFloor = () => router.push('/?floor=' + machine.floor);
 
-  if (status === 'out_of_order') return wrap(<OooScreen machine={machine} onSeeFloor={seeFloor} />);
+  if (status === 'out_of_order') return wrap(<OooScreen machine={machine} onSeeFloor={seeFloor} onRestore={doRestore} />);
 
   if (status === 'in_use') {
     if (mine === undefined) return wrap(<LoadingScreen />);
@@ -214,6 +231,7 @@ export default function MachinePage() {
       canConfirm={() => valid && !busyInfo}
       onBlocked={() => setTried(true)}
       onConfirm={doStart}
+      onReport={doReport}
     />
   );
 }

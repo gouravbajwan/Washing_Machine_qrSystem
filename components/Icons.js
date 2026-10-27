@@ -47,3 +47,11 @@ export const BellIcon = ({ size = 18 }) => (
 export const Chevrons = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#23224A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 6l6 6-6 6M13 6l6 6-6 6" /></svg>
 );
+
+export const InfoIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9.5" />
+    <path d="M12 11v5.5" />
+    <circle cx="12" cy="7.6" r=".6" fill="currentColor" />
+  </svg>
+);

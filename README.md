@@ -26,7 +26,7 @@ The full history is not readable with the public key (view it in Supabase → Ta
 
 ## Notes
 - Anyone with a machine's QR can mark it free (trust-based, fine for a hostel).
-- Mark a machine broken: `update machines set status='out_of_order' where id='f3-w2';`
+- Broken machines: anyone can report one from its QR page (with a reason) and mark it working again. Run `supabase/migration_report.sql` once to enable this. Manual override: `update machines set status='out_of_order', ooo_reason='Water leak' where id='f3-w2';`
 - Add a machine: `insert into machines (id,name,floor) values ('f3-w3','Washer 3',3);` then reprint `/qr`.
 
 ## Wash reminders (push notifications)

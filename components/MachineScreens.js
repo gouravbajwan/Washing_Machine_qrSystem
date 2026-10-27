@@ -1,9 +1,10 @@
 'use client';
+import { useState } from 'react';
 import Water from './Water';
 import Digits from './Digits';
 import SlideToConfirm from './SlideToConfirm';
-import { CheckIcon, DrumIcon, WrenchIcon, ClockIcon, HourglassIcon } from './Icons';
-import { floorLabel, mmss, clockText } from '../lib/format';
+import { CheckIcon, DrumIcon, WrenchIcon, ClockIcon, HourglassIcon, InfoIcon } from './Icons';
+import { floorLabel, mmss, clockText, reportedText } from '../lib/format';
 
 export const DURS = [15, 25, 35];
 
@@ -55,11 +56,89 @@ export function MessageScreen({ title, text, children }) {
   );
 }
 
+// ---- bottom sheet + report form (out-of-service reports) ----
+const REASONS = ['Not spinning', 'Water leak', 'Won’t drain', 'Won’t turn on', 'Door stuck', 'Other'];
+
+function Sheet({ title, text, onClose, children }) {
+  return (
+    <div role="dialog" aria-modal="true" aria-label={title} style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <button type="button" aria-label="Close" onClick={onClose} style={{ position: 'absolute', inset: 0, border: 0, background: 'rgba(35,34,74,.38)', cursor: 'pointer' }} />
+      <div style={{ position: 'relative', width: '100%', maxWidth: 430, background: 'var(--surface)', borderRadius: '28px 28px 0 0', padding: '22px 20px max(24px, env(safe-area-inset-bottom))', boxShadow: 'var(--shadow)', animation: 'toast 300ms ease-out' }}>
+        <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, letterSpacing: '-.02em' }}>{title}</h2>
+        {text && <p style={{ margin: '8px 0 0', fontSize: 14, fontWeight: 500, lineHeight: 1.45, color: 'var(--ink-2)' }}>{text}</p>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const sheetBtn = (primary, disabled) => ({ flex: 1, height: 54, borderRadius: 999, border: 0, background: primary ? 'var(--nav)' : 'var(--field)', color: primary ? 'var(--nav-ink)' : 'var(--ink)', fontSize: 15, fontWeight: 600, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? .45 : 1 });
+
+export function ReportSheet({ machine, onClose, onSubmit }) {
+  const [pick, setPick] = useState(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const extra = text.trim();
+  const reason = !pick ? '' : pick === 'Other' ? extra : extra ? `${pick} – ${extra}` : pick;
+  const ok = reason.length >= 3 && reason.length <= 120;
+  async function go() {
+    if (!ok || busy) return;
+    setBusy(true); setErr('');
+    const msg = await onSubmit(reason);
+    if (msg) { setErr(msg); setBusy(false); }
+  }
+  return (
+    <Sheet title={`Report ${machine.name}`} text="Tell others what’s wrong. It will show as out of service until someone marks it working again." onClose={onClose}>
+      <div role="radiogroup" aria-label="What’s wrong?" style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {REASONS.map((r) => {
+          const sel = pick === r;
+          return (
+            <button key={r} type="button" role="radio" aria-checked={sel} onClick={() => setPick(r)} className="pressable"
+              style={{ height: 44, padding: '0 16px', borderRadius: 999, border: 0, background: sel ? 'var(--nav)' : 'var(--field)', color: sel ? 'var(--nav-ink)' : 'var(--ink)', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'background-color 240ms ease-out, color 240ms ease-out' }}>{r}</button>
+          );
+        })}
+      </div>
+      {pick && (
+        <input autoFocus={pick === 'Other'} value={text} onChange={(e) => setText(e.target.value.slice(0, 100))} maxLength={100}
+          placeholder={pick === 'Other' ? 'What’s wrong?' : 'Add details (optional)'} aria-label="Details"
+          style={{ marginTop: 12, width: '100%', height: 54, borderRadius: 18, border: 0, background: 'var(--field)', color: 'var(--ink)', padding: '0 16px', fontSize: 16, fontWeight: 600, outline: 'none' }} />
+      )}
+      {err && <p role="alert" style={{ margin: '12px 2px 0', fontSize: 13, fontWeight: 600, color: 'var(--err-ink)', lineHeight: 1.35 }}>{err}</p>}
+      <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
+        <button type="button" onClick={onClose} className="pressable" style={sheetBtn(false, false)}>Cancel</button>
+        <button type="button" onClick={go} disabled={!ok || busy} className="pressable" style={sheetBtn(true, !ok || busy)}>{busy ? 'Reporting…' : 'Report problem'}</button>
+      </div>
+    </Sheet>
+  );
+}
+
+function RestoreSheet({ machine, onClose, onRestore }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function go() {
+    if (busy) return;
+    setBusy(true); setErr('');
+    const msg = await onRestore();
+    if (msg) { setErr(msg); setBusy(false); }
+  }
+  return (
+    <Sheet title={`Is ${machine.name} working again?`} text="Only mark it available if you’ve checked it works. Everyone will be able to use it." onClose={onClose}>
+      {err && <p role="alert" style={{ margin: '12px 2px 0', fontSize: 13, fontWeight: 600, color: 'var(--err-ink)' }}>{err}</p>}
+      <div style={{ marginTop: 18, display: 'flex', gap: 10 }}>
+        <button type="button" onClick={onClose} className="pressable" style={sheetBtn(false, false)}>Not yet</button>
+        <button type="button" onClick={go} disabled={busy} className="pressable" style={sheetBtn(true, busy)}>{busy ? 'Updating…' : 'Yes, mark available'}</button>
+      </div>
+    </Sheet>
+  );
+}
+
 // ------------------------------------------------------------------ FREE
 export function FreeScreen({
   machine, profile, editing, name, room, onName, onRoom, dur, onDur, custom, onCustom, errors, tried, donePreview,
-  busyInfo, grabbed, genericError, onSeeFloor, onOpenBusy, onEditProfile, remindNode, onGesture, canConfirm, onBlocked, onConfirm,
+  busyInfo, grabbed, genericError, onSeeFloor, onOpenBusy, onEditProfile, remindNode, onGesture, canConfirm, onBlocked, onConfirm, onReport,
 }) {
+  const [reporting, setReporting] = useState(false);
   const hasProfile = !!profile && !editing;
   const field = (invalid) => ({ width: '100%', height: 58, borderRadius: 20, border: `2px solid ${invalid ? 'var(--err-ink)' : 'transparent'}`, background: 'var(--field)', color: 'var(--ink)', padding: '0 18px', fontSize: 17, fontWeight: 600, outline: 'none', transition: 'border-color 200ms ease-out' });
   return (
@@ -144,7 +223,11 @@ export function FreeScreen({
         <div style={{ flex: 1, minHeight: 24 }} />
         <SlideToConfirm label="Slide to start" ariaLabel="Slide to start the timer" ripColor="#8379EE" shadow={false}
           onGesture={onGesture} canConfirm={canConfirm} onBlocked={onBlocked} onConfirm={onConfirm} fallbackLabel="Tap to start instead" />
+        {onReport && (
+          <button type="button" onClick={() => setReporting(true)} style={{ marginTop: 8, alignSelf: 'center', height: 48, padding: '0 12px', border: 0, background: 'transparent', color: 'var(--ink-2)', fontSize: 14, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}>Machine not working? Report a problem</button>
+        )}
       </div>
+      {reporting && <ReportSheet machine={machine} onClose={() => setReporting(false)} onSubmit={onReport} />}
     </div>
   );
 }
@@ -255,23 +338,40 @@ export function FinishedScreen({ machine, onFree }) {
 }
 
 // ------------------------------------------------------------------ OUT OF ORDER
-export function OooScreen({ machine, onSeeFloor }) {
+export function OooScreen({ machine, onSeeFloor, onRestore }) {
+  const [info, setInfo] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const reason = machine.ooo_reason || 'No reason was given.';
+  const when = machine.ooo_at ? reportedText(machine.ooo_at) : '';
   return (
     <div style={{ position: 'relative', minHeight: '100dvh' }}>
       <div style={{ padding: topPad }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={floorChip}>{floorLabel(machine.floor)}</span>
-          <span style={statusChip('var(--ooo)', 'var(--ooo-ink)')}><WrenchIcon />Out of order</span>
+          <span style={statusChip('var(--ooo)', 'var(--ooo-ink)')}><WrenchIcon />Out of service</span>
+          <button type="button" onClick={() => setInfo((v) => !v)} aria-expanded={info} aria-label="Why is this out of service?" className="pressable"
+            style={{ width: 34, height: 34, borderRadius: 999, border: 0, background: info ? 'var(--nav)' : 'var(--surface)', color: info ? 'var(--nav-ink)' : 'var(--ink)', boxShadow: 'var(--shadow)', display: 'grid', placeItems: 'center', cursor: 'pointer', transition: 'background-color 240ms ease-out, color 240ms ease-out' }}><InfoIcon size={17} /></button>
         </div>
         <h1 style={h1Big}>{machine.name}</h1>
         <p style={{ margin: '10px 0 0', fontSize: 17, lineHeight: 1.4, fontWeight: 500, color: 'var(--ink-2)' }}>This machine is on a break. Try another one</p>
+        {info && (
+          <div style={{ marginTop: 16, padding: '14px 16px', borderRadius: 22, background: 'var(--surface)', boxShadow: 'var(--shadow)', animation: 'toast 240ms ease-out' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', letterSpacing: '.02em' }}>Reason</div>
+            <div style={{ marginTop: 3, fontSize: 18, fontWeight: 700, lineHeight: 1.3 }}>{reason}</div>
+            {when && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>{when}</div>}
+          </div>
+        )}
       </div>
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
         <Water height={440} level={0.3} mode="flat" mood="sleepy" spriteSize={136} />
       </div>
+      {onRestore && (
+        <button type="button" onClick={() => setRestoring(true)} style={{ position: 'absolute', left: 20, right: 20, bottom: 100, zIndex: 3, height: 48, border: 0, background: 'transparent', color: 'var(--ink)', fontSize: 14, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}>Working again? Mark as available</button>
+      )}
       <button type="button" onClick={onSeeFloor} className="pressable" style={{ position: 'absolute', left: 20, right: 20, bottom: 34, zIndex: 3, height: 60, borderRadius: 999, border: 0, background: 'var(--nav)', color: 'var(--nav-ink)', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>
         See free machines on {floorLabel(machine.floor).toLowerCase()}
       </button>
+      {restoring && <RestoreSheet machine={machine} onClose={() => setRestoring(false)} onRestore={onRestore} />}
     </div>
   );
 }

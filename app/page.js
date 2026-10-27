@@ -6,7 +6,7 @@ import { useMachines, useNow, live } from '../lib/hooks';
 import { mmss, floorLabel } from '../lib/format';
 import Water from '../components/Water';
 import Digits from '../components/Digits';
-import { CheckIcon, DrumIcon, WrenchIcon, LogoIcon, BellIcon } from '../components/Icons';
+import { CheckIcon, DrumIcon, WrenchIcon, LogoIcon, BellIcon, InfoIcon } from '../components/Icons';
 
 const pill = { position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5, height: 26, padding: '0 10px 0 8px', borderRadius: 999, background: 'var(--pill-bg)', fontSize: 12, fontWeight: 600 };
 
@@ -19,12 +19,13 @@ function Skeleton({ w, h, r = 999 }) {
 }
 
 function MachineCard({ m, status, left, flashCount }) {
+  const [why, setWhy] = useState(false);
   const fc = flashCount || 0;
   const totalS = m.total || Math.max(left, 25 * 60);
   const bar = status === 'in_use' ? Math.max(0, Math.min(1, 1 - left / totalS)) : 0;
   const bg = status === 'free' ? 'var(--mint)' : status === 'in_use' ? 'var(--peri)' : 'var(--ooo)';
   const who = m.user_name ? `${m.user_name} · Room ${m.room_no}` : '';
-  const aria = `${m.name}, ${status === 'in_use' ? `in use${who ? ' by ' + who : ''}, ${mmss(left)} left` : status === 'out_of_order' ? 'out of order' : 'free'}`;
+  const aria = `${m.name}, ${status === 'in_use' ? `in use${who ? ' by ' + who : ''}, ${mmss(left)} left` : status === 'out_of_order' ? `out of service${m.ooo_reason ? ': ' + m.ooo_reason : ''}` : 'free'}`;
   return (
     <div aria-label={aria} style={{ position: 'relative', overflow: 'hidden', minHeight: 150, borderRadius: 26, padding: 16, background: bg, transition: 'background-color 600ms ease-out', animation: fc ? `hl-wash${fc % 2} 800ms ease-out` : 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
       <span data-motion="" key={'s' + fc} style={{ position: 'absolute', inset: 0, background: 'linear-gradient(100deg,transparent 25%,rgba(255,255,255,.75) 50%,transparent 75%)', transform: 'translateX(-120%)', animation: fc ? `hl-sweep${fc % 2} 900ms ease-out` : 'none', pointerEvents: 'none' }} />
@@ -49,8 +50,12 @@ function MachineCard({ m, status, left, flashCount }) {
       )}
       {status === 'out_of_order' && (
         <>
-          <span style={{ ...pill, color: 'var(--ooo-ink)' }}><WrenchIcon />Out of order</span>
-          <span style={{ position: 'relative', marginTop: 'auto', fontSize: 15, fontWeight: 600, color: 'var(--ooo-ink)' }}>Not working</span>
+          <span style={{ ...pill, color: 'var(--ooo-ink)' }}><WrenchIcon />Out of service</span>
+          <span style={{ position: 'relative', marginTop: 'auto', width: '100%', display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+            <span style={{ flex: 1, minWidth: 0, fontSize: why ? 13 : 15, fontWeight: 600, lineHeight: 1.3, color: 'var(--ooo-ink)', overflowWrap: 'anywhere' }}>{why ? (m.ooo_reason || 'No reason was given') : 'Not working'}</span>
+            <button type="button" onClick={() => setWhy((v) => !v)} aria-expanded={why} aria-label={`Why is ${m.name} out of service?`} className="pressable"
+              style={{ flex: 'none', width: 32, height: 32, borderRadius: 999, border: 0, background: why ? 'var(--nav)' : 'var(--pill-bg)', color: why ? 'var(--nav-ink)' : 'var(--ooo-ink)', display: 'grid', placeItems: 'center', cursor: 'pointer', transition: 'background-color 240ms ease-out, color 240ms ease-out' }}><InfoIcon size={16} /></button>
+          </span>
         </>
       )}
     </div>
