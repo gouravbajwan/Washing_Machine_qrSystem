@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMachines, useNow, live } from '../lib/hooks';
 import { mmss, floorLabel } from '../lib/format';
+import { getWash } from '../lib/wash';
 import Water from '../components/Water';
 import Digits from '../components/Digits';
 import { CheckIcon, DrumIcon, WrenchIcon, LogoIcon, BellIcon, InfoIcon } from '../components/Icons';
@@ -62,6 +63,30 @@ function MachineCard({ m, status, left, flashCount }) {
   );
 }
 
+// "Your wash" shortcut: lets the person who started a wash get back to their own timer
+// (or the "I've taken my clothes" screen) after browsing the board.
+function MyWashBar({ wash, machines, now }) {
+  if (!wash) return null;
+  const m = machines.find((x) => x.id === wash.id);
+  if (!m) return null;
+  const lv = live(m, now);
+  const mine = lv.status === 'in_use' && Math.abs(m.endsAt - wash.endsAt) < 25000;
+  const done = now >= wash.endsAt - 1000 && now - wash.endsAt < 12 * 3600 * 1000 && !(lv.status === 'in_use' && !mine) && lv.status !== 'out_of_order';
+  if (!mine && !done) return null;
+  const where = `${m.name} · ${floorLabel(m.floor)}`;
+  const base = { margin: '16px 20px 0', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 12px 12px 18px', borderRadius: 26, textDecoration: 'none', boxShadow: 'var(--shadow)' };
+  return (
+    <Link href={'/machine/' + m.id} aria-label={mine ? `Your wash on ${where}, ${mmss(lv.left)} left. Open your timer` : `Your wash on ${where} is done. Open it`}
+      className="pressable focusable" style={{ ...base, background: mine ? 'var(--nav)' : 'var(--mint)', color: mine ? 'var(--nav-ink)' : 'var(--mint-ink)' }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: 12, fontWeight: 600, opacity: .75 }}>{mine ? 'Your wash' : 'Your wash is done'}</span>
+        <span style={{ display: 'block', marginTop: 2, fontSize: 16, fontWeight: 700, letterSpacing: '-.01em' }}>{where}{mine ? ` · ${mmss(lv.left)} left` : ''}</span>
+      </span>
+      <span style={{ flex: 'none', height: 44, padding: '0 16px', borderRadius: 999, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 700, background: mine ? 'rgba(255,255,255,.18)' : 'var(--surface)', color: mine ? 'var(--nav-ink)' : 'var(--mint-ink)' }}>{mine ? 'Open timer' : 'I’ve taken my clothes'}</span>
+    </Link>
+  );
+}
+
 function Board() {
   const params = useSearchParams();
   const { machines, loading, error, refresh } = useMachines(null);
@@ -72,6 +97,14 @@ function Board() {
   const [toast, setToast] = useState('');
   const [flash, setFlash] = useState({});
   const prevSt = useRef({});
+  const [wash, setWash] = useState(null);
+  useEffect(() => {
+    const sync = () => setWash(getWash());
+    sync();
+    window.addEventListener('pageshow', sync);
+    document.addEventListener('visibilitychange', sync);
+    return () => { window.removeEventListener('pageshow', sync); document.removeEventListener('visibilitychange', sync); };
+  }, []);
 
   const floors = [...new Set(machines.map((m) => m.floor))].sort((a, b) => a - b);
   const fp = params.get('floor');
@@ -146,6 +179,8 @@ function Board() {
             </div>
           </div>
         </div>
+
+        {isLive && <MyWashBar wash={wash} machines={machines} now={now} />}
 
         {isLive && (
           <div style={{ padding: '28px 20px 0' }}>
