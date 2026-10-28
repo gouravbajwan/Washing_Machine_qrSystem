@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import QRCode from 'qrcode';
 import { supabase } from '../../lib/supabase';
 import { useMachines, useNow, live } from '../../lib/hooks';
 import { floorLabel } from '../../lib/format';
@@ -8,6 +9,30 @@ import { floorLabel } from '../../lib/format';
 const KEY = 'wm_owner';
 const card = { background: 'var(--surface)', borderRadius: 26, padding: 16, boxShadow: 'var(--shadow)' };
 const pillBtn = (primary, danger) => ({ height: 46, padding: '0 18px', borderRadius: 999, border: 0, cursor: 'pointer', fontSize: 14, fontWeight: 600, background: primary ? 'var(--nav)' : danger ? 'var(--err-bg)' : 'var(--field)', color: primary ? 'var(--nav-ink)' : danger ? 'var(--err-ink)' : 'var(--ink)' });
+
+// Saves a machine's QR code as a JPG on this phone (uses this site's own address, no other service needed).
+async function downloadQr(m) {
+  const url = `${window.location.origin}/machine/${m.id}`;
+  const qr = document.createElement('canvas');
+  await QRCode.toCanvas(qr, url, { width: 800, margin: 2, errorCorrectionLevel: 'M' });
+  const c = document.createElement('canvas');
+  c.width = 900; c.height = 1130;
+  const x = c.getContext('2d');
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height);
+  x.drawImage(qr, 50, 50, 800, 800);
+  x.textAlign = 'center'; x.fillStyle = '#23224A';
+  const font = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  x.font = `700 72px ${font}`; x.fillText(m.name, 450, 950);
+  x.fillStyle = '#5F5E82'; x.font = `600 40px ${font}`; x.fillText(floorLabel(m.floor) + ' · scan to start your wash', 450, 1020);
+  x.font = `500 28px ${font}`; x.fillText(url.replace(/^https?:\/\//, ''), 450, 1075);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.95));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${floorLabel(m.floor).replace(/\s+/g, '-')}-${m.name.replace(/\s+/g, '-')}-QR.jpg`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const fromId = (id) => { const m = /^f(\d+)-w(\d+)$/.exec(id); return m ? { id, floor: Number(m[1]), name: 'Washer ' + m[2] } : null; };
 
 // Two taps: the first one asks "Sure?", the second does it (resets after 4 s).
 function ConfirmButton({ label, confirmLabel, onConfirm, disabled, style }) {
@@ -54,13 +79,13 @@ export default function Admin() {
     });
   }, []);
 
-  async function run(fn, params, okText) {
+  async function run(fn, params, okText, idsOf) {
     setBusy(true); setMsg(null);
     const { data, error } = await supabase.rpc(fn, { p_secret: secret, ...params });
     setBusy(false);
     if (error) { setMsg({ ok: false, text: error.message }); return false; }
     await refresh();
-    setMsg({ ok: true, text: typeof okText === 'function' ? okText(data) : okText });
+    setMsg({ ok: true, text: typeof okText === 'function' ? okText(data) : okText, ids: idsOf ? idsOf(data) : [] });
     return true;
   }
 
@@ -88,7 +113,17 @@ export default function Admin() {
       </div>
 
       {msg && (
-        <div role="status" style={{ margin: '16px 0 0', padding: '12px 16px', borderRadius: 20, fontSize: 14, fontWeight: 600, lineHeight: 1.4, background: msg.ok ? 'var(--mint)' : 'var(--err-bg)', color: msg.ok ? 'var(--mint-ink)' : 'var(--err-ink)' }}>{msg.text}</div>
+        <div role="status" style={{ margin: '16px 0 0', padding: '12px 16px', borderRadius: 20, fontSize: 14, fontWeight: 600, lineHeight: 1.4, background: msg.ok ? 'var(--mint)' : 'var(--err-bg)', color: msg.ok ? 'var(--mint-ink)' : 'var(--err-ink)' }}>
+          <div>{msg.text}</div>
+          {msg.ok && msg.ids && msg.ids.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {msg.ids.map(fromId).filter(Boolean).map((m) => (
+                <button key={m.id} type="button" className="pressable" onClick={() => downloadQr(m)}
+                  style={{ height: 46, borderRadius: 999, border: 0, background: 'var(--nav)', color: 'var(--nav-ink)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Download QR (JPG) · {m.name}, {floorLabel(m.floor)}</button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
       {error && <p role="alert" style={{ margin: '16px 4px 0', color: 'var(--err-ink)', fontWeight: 600 }}>{error}</p>}
       {loading && <p style={{ margin: '20px 4px 0', color: 'var(--ink-2)' }}>Loading…</p>}
@@ -112,6 +147,8 @@ export default function Admin() {
                         <span style={{ display: 'block', fontSize: 16, fontWeight: 700 }}>{m.name}</span>
                         <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}>{label}</span>
                       </span>
+                      <button type="button" className="pressable" aria-label={`Download QR for ${m.name}`} onClick={() => downloadQr(m)}
+                        style={{ ...pillBtn(false), height: 40, padding: '0 14px', fontSize: 13, background: 'var(--surface)' }}>QR (JPG)</button>
                       <ConfirmButton label="Remove" confirmLabel="Tap to confirm" disabled={busy}
                         onConfirm={() => run('admin_remove_machine', { p_machine: m.id }, `${m.name} removed from ${floorLabel(f)}.`)}
                         style={{ ...pillBtn(false, true), height: 40, padding: '0 14px', fontSize: 13 }} />
@@ -121,7 +158,7 @@ export default function Admin() {
               </ul>
               <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button type="button" disabled={busy || list.length >= 12} className="pressable" style={{ ...pillBtn(true), opacity: busy || list.length >= 12 ? .5 : 1 }}
-                  onClick={() => run('admin_add_machine', { p_floor: f }, (id) => `Added a machine on ${floorLabel(f)} (${id}). Print its QR from the QR page and stick it on the machine.`)}>+ Add machine</button>
+                  onClick={() => run('admin_add_machine', { p_floor: f }, (id) => `Added a machine on ${floorLabel(f)}. Download its QR below and stick it on the machine.`, (id) => [id])}>+ Add machine</button>
                 <ConfirmButton label="Remove floor" confirmLabel="Remove all machines?" disabled={busy}
                   onConfirm={() => run('admin_remove_floor', { p_floor: f }, `${floorLabel(f)} removed.`)} style={pillBtn(false, true)} />
               </div>
@@ -148,12 +185,12 @@ export default function Admin() {
           </div>
           {nf !== null && floors.includes(nf) && <p style={{ margin: '8px 4px 0', fontSize: 13, fontWeight: 600, color: 'var(--err-ink)' }}>That floor already exists.</p>}
           <button type="button" disabled={busy || !nfOk} className="pressable" style={{ ...pillBtn(true), width: '100%', marginTop: 12, height: 52, opacity: busy || !nfOk ? .5 : 1 }}
-            onClick={async () => { if (await run('admin_add_floor', { p_floor: nf, p_machines: newCount }, `${floorLabel(nf)} added with ${newCount} ${newCount === 1 ? 'machine' : 'machines'}. Print their QR codes from the QR page.`)) setNewFloor(''); }}>Add floor</button>
+            onClick={async () => { if (await run('admin_add_floor', { p_floor: nf, p_machines: newCount }, `${floorLabel(nf)} added with ${newCount} ${newCount === 1 ? 'machine' : 'machines'}. Download each machine’s QR below.`, () => Array.from({ length: newCount }, (_, i) => `f${nf}-w${i + 1}`))) setNewFloor(''); }}>Add floor</button>
         </section>
       </div>
 
       <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-        <Link href="/qr" style={{ fontWeight: 600, color: 'var(--ink)' }}>Print QR codes for machines and floors →</Link>
+        <Link href="/qr" style={{ fontWeight: 600, color: 'var(--ink)' }}>See all QR codes on one printable page →</Link>
         <Link href="/" style={{ fontWeight: 600, color: 'var(--ink-2)' }}>View the board</Link>
         <button type="button" onClick={() => { try { localStorage.removeItem(KEY); } catch {} setSecret(null); setAccess('denied'); }}
           style={{ height: 44, border: 0, background: 'transparent', color: 'var(--ink-2)', fontSize: 14, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}>Leave owner mode on this phone</button>
