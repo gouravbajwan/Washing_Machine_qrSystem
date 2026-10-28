@@ -16,7 +16,7 @@ async function downloadQr(m) {
   const qr = document.createElement('canvas');
   await QRCode.toCanvas(qr, url, { width: 800, margin: 2, errorCorrectionLevel: 'M' });
   const c = document.createElement('canvas');
-  c.width = 900; c.height = 1130;
+  c.width = 900; c.height = 1080;
   const x = c.getContext('2d');
   x.fillStyle = '#ffffff'; x.fillRect(0, 0, c.width, c.height);
   x.drawImage(qr, 50, 50, 800, 800);
@@ -24,7 +24,6 @@ async function downloadQr(m) {
   const font = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   x.font = `700 72px ${font}`; x.fillText(m.name, 450, 950);
   x.fillStyle = '#5F5E82'; x.font = `600 40px ${font}`; x.fillText(floorLabel(m.floor) + ' · scan to start your wash', 450, 1020);
-  x.font = `500 28px ${font}`; x.fillText(url.replace(/^https?:\/\//, ''), 450, 1075);
   const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.95));
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -58,6 +57,7 @@ export default function Admin() {
   const [msg, setMsg] = useState(null); // {ok, text}
   const [newFloor, setNewFloor] = useState('');
   const [newCount, setNewCount] = useState(2);
+  const [editing, setEditing] = useState(null); // { id, value }
 
   // pick up the secret from the QR link (after "#k="), remember it on this phone, then hide it from the address bar
   useEffect(() => {
@@ -142,16 +142,32 @@ export default function Admin() {
                   const st = live(m, now).status;
                   const label = st === 'in_use' ? 'In use' : st === 'out_of_order' ? 'Out of service' : 'Free';
                   return (
-                    <li key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 6px 6px 14px', borderRadius: 20, background: 'var(--field)' }}>
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: 'block', fontSize: 16, fontWeight: 700 }}>{m.name}</span>
-                        <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}>{label}</span>
-                      </span>
-                      <button type="button" className="pressable" aria-label={`Download QR for ${m.name}`} onClick={() => downloadQr(m)}
-                        style={{ ...pillBtn(false), height: 40, padding: '0 14px', fontSize: 13, background: 'var(--surface)' }}>QR (JPG)</button>
-                      <ConfirmButton label="Remove" confirmLabel="Tap to confirm" disabled={busy}
-                        onConfirm={() => run('admin_remove_machine', { p_machine: m.id }, `${m.name} removed from ${floorLabel(f)}.`)}
-                        style={{ ...pillBtn(false, true), height: 40, padding: '0 14px', fontSize: 13 }} />
+                    <li key={m.id} style={{ padding: '10px 10px 10px 14px', borderRadius: 20, background: 'var(--field)' }}>
+                      {editing && editing.id === m.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input autoFocus value={editing.value} maxLength={30} aria-label="Machine name"
+                            onChange={(e) => setEditing({ id: m.id, value: e.target.value })}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && editing.value.trim()) run('admin_rename_machine', { p_machine: m.id, p_name: editing.value }, `Renamed to ${editing.value.trim()}. Download its QR again if you want the new name on the label.`).then((ok) => ok && setEditing(null)); }}
+                            style={{ flex: 1, minWidth: 0, height: 46, borderRadius: 16, border: 0, background: 'var(--surface)', color: 'var(--ink)', padding: '0 14px', fontSize: 16, fontWeight: 700, outline: 'none' }} />
+                          <button type="button" className="pressable" disabled={busy || !editing.value.trim()} style={{ ...pillBtn(true), height: 44, padding: '0 16px', opacity: busy || !editing.value.trim() ? .5 : 1 }}
+                            onClick={async () => { if (await run('admin_rename_machine', { p_machine: m.id, p_name: editing.value }, `Renamed to ${editing.value.trim()}. Download its QR again if you want the new name on the label.`)) setEditing(null); }}>Save</button>
+                          <button type="button" className="pressable" onClick={() => setEditing(null)} style={{ ...pillBtn(false), height: 44, padding: '0 14px', background: 'var(--surface)' }}>Cancel</button>
+                        </div>
+                      ) : (
+                        <>
+                          <span style={{ display: 'block', fontSize: 16, fontWeight: 700 }}>{m.name}</span>
+                          <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}>{label}</span>
+                          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button type="button" className="pressable" onClick={() => setEditing({ id: m.id, value: m.name })}
+                              style={{ ...pillBtn(false), height: 40, padding: '0 14px', fontSize: 13, background: 'var(--surface)' }}>Rename</button>
+                            <button type="button" className="pressable" aria-label={`Download QR for ${m.name}`} onClick={() => downloadQr(m)}
+                              style={{ ...pillBtn(false), height: 40, padding: '0 14px', fontSize: 13, background: 'var(--surface)' }}>QR (JPG)</button>
+                            <ConfirmButton label="Remove" confirmLabel="Tap to confirm" disabled={busy}
+                              onConfirm={() => run('admin_remove_machine', { p_machine: m.id }, `${m.name} removed from ${floorLabel(f)}.`)}
+                              style={{ ...pillBtn(false, true), height: 40, padding: '0 14px', fontSize: 13 }} />
+                          </div>
+                        </>
+                      )}
                     </li>
                   );
                 })}
