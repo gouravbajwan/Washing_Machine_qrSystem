@@ -43,3 +43,8 @@ One-time setup:
 Notes: Android works straight from Chrome. iPhones must first use Share > Add to Home Screen and enable reminders
 inside the installed app (`/reminders` page), then start washes using the same name and room number.
 Reminders are matched to the person by device and by name + room number.
+
+## Owner QR (add/remove floors and machines)
+1. Run `supabase/migration_admin.sql` once in the Supabase SQL Editor.
+2. Run `npm run owner-qr -- https://your-app.vercel.app`. It saves `owner-qr/owner-qr.png` (git-ignored) and prints one SQL line; run that line in Supabase.
+3. Scan the owner QR with your phone to open `/admin`. Keep the QR private. Running step 2 again makes a new secret and the old QR stops working.
