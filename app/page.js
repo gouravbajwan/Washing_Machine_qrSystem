@@ -108,10 +108,13 @@ function Board() {
 
   const floors = [...new Set(machines.map((m) => m.floor))].sort((a, b) => a - b);
   const fp = params.get('floor');
-  const req = fp !== null && fp !== '' && !Number.isNaN(Number(fp)) ? Number(fp) : null;
-  const active = picked !== null && floors.includes(picked) ? picked : req !== null && floors.includes(req) ? req : floors[0];
+  const req = fp === 'all' ? 'all' : fp !== null && fp !== '' && !Number.isNaN(Number(fp)) ? Number(fp) : null;
+  const tabs = ['all', ...floors];
+  const ok = (t) => t === 'all' || floors.includes(t);
+  const active = picked !== null && ok(picked) ? picked : req !== null && ok(req) ? req : floors[0];
+  const showAll = active === 'all';
 
-  const rows = machines.filter((m) => m.floor === active).map((m) => ({ m, ...live(m, now) }));
+  const rows = machines.filter((m) => showAll || m.floor === active).map((m) => ({ m, ...live(m, now) }));
   const free = rows.filter((r) => r.status === 'free').length;
   const total = rows.length;
 
@@ -153,8 +156,8 @@ function Board() {
   const isError = !!error && !machines.length;
   const isEmpty = !isLoading && !isError && !total;
   const isLive = !isLoading && !isError && !isEmpty;
-  const n = Math.max(1, floors.length);
-  const idx = Math.max(0, floors.indexOf(active));
+  const n = Math.max(1, tabs.length);
+  const idx = Math.max(0, tabs.indexOf(active));
 
   const water = isError
     ? { h: 200, level: 0.3, mode: 'flat', mood: 'sleepy', size: 96, label: '' }
@@ -188,7 +191,7 @@ function Board() {
               <Digits value={String(free)} digitW=".56em" />
               <span style={{ fontSize: '.5em', fontWeight: 600, color: 'var(--ink-2)', letterSpacing: '-.02em' }}>of {total}</span>
             </div>
-            <p style={{ margin: '10px 0 0', fontSize: 16, fontWeight: 500, color: 'var(--ink-2)' }}>machines free on {floorLabel(active).toLowerCase()}</p>
+            <p style={{ margin: '10px 0 0', fontSize: 16, fontWeight: 500, color: 'var(--ink-2)' }}>{showAll ? 'machines free across all floors' : `machines free on ${floorLabel(active).toLowerCase()}`}</p>
           </div>
         )}
         {isLoading && (
@@ -221,10 +224,27 @@ function Board() {
                 <span style={{ fontSize: 15, fontWeight: 700 }}>Machines</span>
                 <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>Updates on its own</span>
               </div>
-              <div data-motion="" key={active} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, animation: xf ? `hl-xf${xf % 2} 320ms ease-out both` : 'none' }}>
-                {rows.map(({ m, status, left }) => (
-                  <MachineCard key={m.id} m={m} status={status} left={left} flashCount={flash[m.id]} />
-                ))}
+              <div data-motion="" key={active} style={{ display: 'flex', flexDirection: 'column', gap: 22, animation: xf ? `hl-xf${xf % 2} 320ms ease-out both` : 'none' }}>
+                {(showAll ? floors : [active]).map((f) => {
+                  const fr = rows.filter((r) => r.m.floor === f);
+                  if (!fr.length) return null;
+                  const ff = fr.filter((r) => r.status === 'free').length;
+                  return (
+                    <section key={f} aria-label={floorLabel(f)}>
+                      {showAll && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px 10px' }}>
+                          <span style={{ fontSize: 15, fontWeight: 700 }}>{floorLabel(f)}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: ff ? 'var(--mint-ink)' : 'var(--ink-2)' }}>{ff} of {fr.length} free</span>
+                        </div>
+                      )}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        {fr.map(({ m, status, left }) => (
+                          <MachineCard key={m.id} m={m} status={status} left={left} flashCount={flash[m.id]} />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
               <p style={{ margin: '22px 4px 0', textAlign: 'center', fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>View only. Scan the QR on a machine to start your wash.</p>
             </>
@@ -257,10 +277,10 @@ function Board() {
         <nav aria-label="Floors" style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', width: 'calc(100% - 32px)', maxWidth: 398, bottom: 'max(24px, env(safe-area-inset-bottom))', zIndex: 5, height: 68, padding: 6, borderRadius: 999, background: 'var(--surface)', boxShadow: 'var(--shadow)' }}>
           <div style={{ position: 'absolute', top: 6, bottom: 6, left: 6, width: `calc((100% - 12px) / ${n})`, borderRadius: 999, background: 'var(--nav)', transform: `translateX(${idx * 100}%)`, transition: 'transform 520ms cubic-bezier(.34,1.56,.64,1)' }} />
           <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${n}, 1fr)`, height: '100%' }}>
-            {floors.map((f) => (
-              <button key={f} type="button" onClick={() => pickFloor(f)} aria-current={f === active ? 'page' : undefined} aria-label={floorLabel(f)} className="focusable"
-                style={{ border: 0, background: 'transparent', borderRadius: 999, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: f === active ? 'var(--nav-ink)' : 'var(--ink-2)', transition: 'color 260ms ease-out' }}>
-                {f === 0 ? 'Ground' : `Floor ${f}`}
+            {tabs.map((f) => (
+              <button key={f} type="button" onClick={() => pickFloor(f)} aria-current={f === active ? 'page' : undefined} aria-label={f === 'all' ? 'All floors' : floorLabel(f)} className="focusable"
+                style={{ border: 0, background: 'transparent', borderRadius: 999, cursor: 'pointer', fontSize: n > 4 ? 13 : 14, fontWeight: 600, padding: 0, color: f === active ? 'var(--nav-ink)' : 'var(--ink-2)', transition: 'color 260ms ease-out' }}>
+                {f === 'all' ? 'All' : f === 0 ? 'Ground' : `Floor ${f}`}
               </button>
             ))}
           </div>
