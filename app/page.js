@@ -19,7 +19,7 @@ function Skeleton({ w, h, r = 999 }) {
   );
 }
 
-function MachineCard({ m, status, left, flashCount }) {
+function MachineCard({ m, status, left, flashCount, mineKind }) {
   const [why, setWhy] = useState(false);
   const fc = flashCount || 0;
   const totalS = m.total || Math.max(left, 25 * 60);
@@ -27,14 +27,14 @@ function MachineCard({ m, status, left, flashCount }) {
   const bg = status === 'free' ? 'var(--mint)' : status === 'in_use' ? 'var(--peri)' : 'var(--ooo)';
   const who = m.user_name ? `${m.user_name} · Room ${m.room_no}` : '';
   const aria = `${m.name}, ${status === 'in_use' ? `in use${who ? ' by ' + who : ''}, ${mmss(left)} left` : status === 'out_of_order' ? `out of service${m.ooo_reason ? ': ' + m.ooo_reason : ''}` : 'free'}`;
-  return (
-    <div aria-label={aria} style={{ position: 'relative', overflow: 'hidden', minHeight: 150, borderRadius: 26, padding: 16, background: bg, transition: 'background-color 600ms ease-out', animation: fc ? `hl-wash${fc % 2} 800ms ease-out` : 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+  const card = (
+    <div aria-label={aria} style={{ position: 'relative', overflow: 'hidden', minHeight: 150, height: '100%', boxShadow: mineKind ? '0 0 0 2.5px var(--nav)' : 'none', borderRadius: 26, padding: 16, background: bg, transition: 'background-color 600ms ease-out', animation: fc ? `hl-wash${fc % 2} 800ms ease-out` : 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
       <span data-motion="" key={'s' + fc} style={{ position: 'absolute', inset: 0, background: 'linear-gradient(100deg,transparent 25%,rgba(255,255,255,.75) 50%,transparent 75%)', transform: 'translateX(-120%)', animation: fc ? `hl-sweep${fc % 2} 900ms ease-out` : 'none', pointerEvents: 'none' }} />
       <span style={{ position: 'relative', fontSize: 17, fontWeight: 700, letterSpacing: '-.01em' }}>{m.name}</span>
       {status === 'free' && (
         <>
           <span style={{ ...pill, color: 'var(--mint-ink)' }}><CheckIcon />Free</span>
-          <span style={{ position: 'relative', marginTop: 'auto', fontSize: 15, fontWeight: 600 }}>Available now</span>
+          <span style={{ position: 'relative', marginTop: 'auto', fontSize: 15, fontWeight: 600 }}>{mineKind ? 'Your wash is done · tap to open' : 'Available now'}</span>
         </>
       )}
       {status === 'in_use' && (
@@ -43,7 +43,7 @@ function MachineCard({ m, status, left, flashCount }) {
           <div aria-hidden="true" style={{ position: 'relative', fontSize: 28, fontWeight: 700, letterSpacing: '-.03em', display: 'flex', lineHeight: 1 }}>
             <Digits value={mmss(left)} />
           </div>
-          {who && <span style={{ position: 'relative', fontSize: 12, fontWeight: 500, color: 'var(--ink-2)', lineHeight: 1.3 }}>{who}</span>}
+          {(mineKind || who) && <span style={{ position: 'relative', fontSize: 12, fontWeight: mineKind ? 700 : 500, color: mineKind ? 'var(--peri-ink)' : 'var(--ink-2)', lineHeight: 1.3 }}>{mineKind ? 'Yours · tap to open' : who}</span>}
           <span style={{ position: 'relative', display: 'block', width: '100%', height: 6, borderRadius: 999, background: 'var(--pill-bg)', overflow: 'hidden', marginTop: 'auto' }}>
             <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: 999, background: 'linear-gradient(90deg,#ABA3F6,#6A5FE2)', transformOrigin: 'left', transform: `scaleX(${bar.toFixed(3)})`, transition: 'transform 1s linear' }} />
           </span>
@@ -61,6 +61,20 @@ function MachineCard({ m, status, left, flashCount }) {
       )}
     </div>
   );
+  // the person's own machine opens their timer page when tapped
+  if (!mineKind) return card;
+  return (
+    <Link href={'/machine/' + m.id} className="pressable focusable" style={{ display: 'block', borderRadius: 26, textDecoration: 'none', color: 'inherit' }}>{card}</Link>
+  );
+}
+
+// Is this machine the wash this phone started? 'timer' = still running, 'done' = finished but not freed yet.
+function mineKind(m, wash, now) {
+  if (!wash || !m || wash.id !== m.id) return null;
+  const lv = live(m, now);
+  if (lv.status === 'in_use' && Math.abs(m.endsAt - wash.endsAt) < 25000) return 'timer';
+  if (lv.status === 'free' && now >= wash.endsAt - 1000 && now - wash.endsAt < 12 * 3600 * 1000) return 'done';
+  return null;
 }
 
 // "Your wash" shortcut: lets the person who started a wash get back to their own timer
@@ -70,8 +84,9 @@ function MyWashBar({ wash, machines, now }) {
   const m = machines.find((x) => x.id === wash.id);
   if (!m) return null;
   const lv = live(m, now);
-  const mine = lv.status === 'in_use' && Math.abs(m.endsAt - wash.endsAt) < 25000;
-  const done = now >= wash.endsAt - 1000 && now - wash.endsAt < 12 * 3600 * 1000 && !(lv.status === 'in_use' && !mine) && lv.status !== 'out_of_order';
+  const kind = mineKind(m, wash, now);
+  const mine = kind === 'timer';
+  const done = kind === 'done';
   if (!mine && !done) return null;
   const where = `${m.name} · ${floorLabel(m.floor)}`;
   const base = { margin: '16px 20px 0', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 12px 12px 18px', borderRadius: 26, textDecoration: 'none', boxShadow: 'var(--shadow)' };
@@ -239,7 +254,7 @@ function Board() {
                       )}
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         {fr.map(({ m, status, left }) => (
-                          <MachineCard key={m.id} m={m} status={status} left={left} flashCount={flash[m.id]} />
+                          <MachineCard key={m.id} m={m} status={status} left={left} flashCount={flash[m.id]} mineKind={mineKind(m, wash, now)} />
                         ))}
                       </div>
                     </section>
