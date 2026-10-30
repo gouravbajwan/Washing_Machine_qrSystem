@@ -1,6 +1,12 @@
 'use client';
 import { useState } from 'react';
 import Water from './Water';
+import { KIND_LIST, BUDDY } from './Sprite';
+
+function savedBuddy() {
+  try { const b = localStorage.getItem('wm_last_buddy'); if (KIND_LIST.includes(b)) return b; } catch {}
+  return 'sock';
+}
 import Digits from './Digits';
 import SlideToConfirm from './SlideToConfirm';
 import { CheckIcon, DrumIcon, WrenchIcon, ClockIcon, HourglassIcon, InfoIcon } from './Icons';
@@ -260,6 +266,7 @@ export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeF
             <Digits value={mmss(left)} digitW=".56em" colonW=".26em" />
           </div>
           <div style={{ marginTop: 6, fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>of {durMin} min</div>
+          {isOwn && KIND_LIST.includes(machine.buddy) && <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: 'var(--peri-ink)' }}>with {BUDDY[machine.buddy]}</div>}
         </div>
       </div>
       <p style={{ margin: '10px 0 0', textAlign: 'center', fontSize: 15, fontWeight: 500, color: 'var(--ink-2)' }}>until this machine is free</p>
@@ -289,7 +296,7 @@ export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeF
       )}
 
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
-        <Water height={330} level={prog} mode="active" mood="float" spriteSize={92} spriteX={isOwn ? '68%' : '50%'} label={Math.round(prog * 100) + '%'} minFill={0.3} maxFill={0.9} />
+        <Water height={330} level={prog} mode="active" mood="float" spriteSize={92} spriteX={isOwn ? '68%' : '50%'} label={Math.round(prog * 100) + '%'} minFill={0.3} maxFill={0.9} kind={KIND_LIST.includes(machine.buddy) ? machine.buddy : savedBuddy()} />
       </div>
       {isOwn && (
         <div style={{ position: 'absolute', left: 20, right: 20, bottom: 30, zIndex: 3 }}>
@@ -328,7 +335,7 @@ export function FinishedScreen({ machine, onFree }) {
       <h1 style={{ margin: '24px 0 0', textAlign: 'center', fontSize: 36, fontWeight: 700, letterSpacing: '-.03em', lineHeight: 1.05 }}>Your wash is done.</h1>
       <p style={{ margin: '8px 0 0', textAlign: 'center', fontSize: 17, fontWeight: 500, color: 'var(--ink-2)' }}>Go get your clothes.</p>
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
-        <Water height={600} level={1} mode="settle" mood="cheer" spriteSize={150} burst label="100%" labelSize={32} minFill={0.1} maxFill={0.72} bubbles={3} />
+        <Water height={600} level={1} mode="settle" mood="cheer" kind={KIND_LIST.includes(machine.buddy) ? machine.buddy : savedBuddy()} spriteSize={150} burst label="100%" labelSize={32} minFill={0.1} maxFill={0.72} bubbles={3} />
       </div>
       <div style={{ position: 'absolute', left: 20, right: 20, bottom: 30, zIndex: 3 }}>
         <SlideToConfirm label="Slide if you've taken your clothes" ariaLabel="Slide to free this machine" onConfirm={onFree} />

@@ -31,7 +31,7 @@ function Layer({ top, deep, ampScale, drift, fill, path, opacity, stroke, childr
 export default function Water({
   height = 220, level = 0.3, mode = 'active', mood = 'float', label = '', spriteSize = 110, spriteX = '50%',
   riseFrom = null, minFill = 0.14, maxFill = 0.8, bubbles, burst = false, ripple = false, rippleX = '80%',
-  sprite = true, labelSize = 26,
+  sprite = true, labelSize = 26, kind = 'sock',
 }) {
   const [risen, setRisen] = useState(false);
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function Water({
             drift={flat ? 'none' : 'hw-drift 11s linear infinite'} />
           {sprite && (
             <div data-motion="" style={{ position: 'absolute', left: spriteX, top: Math.round(-spriteSize * 1.2 * 0.62), transform: 'translate(-50%,0)', animation: flat ? 'none' : (mode === 'settle' ? 'hw-float 7s ease-in-out infinite' : 'hw-float 5.5s ease-in-out infinite') }}>
-              <Sprite mood={mood} size={spriteSize} />
+              <Sprite mood={mood} size={spriteSize} kind={kind} />
             </div>
           )}
           <Layer top={-14} deep={deep} ampScale={amp} path={PF} fill={{ top: c.front, body: c.body }} opacity={0.94} stroke={c.line}

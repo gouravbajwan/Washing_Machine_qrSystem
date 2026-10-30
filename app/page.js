@@ -6,6 +6,7 @@ import { useMachines, useNow, live } from '../lib/hooks';
 import { mmss, floorLabel } from '../lib/format';
 import { getWash } from '../lib/wash';
 import Water from '../components/Water';
+import Sprite from '../components/Sprite';
 import Digits from '../components/Digits';
 import { CheckIcon, DrumIcon, WrenchIcon, LogoIcon, BellIcon, InfoIcon } from '../components/Icons';
 
@@ -40,6 +41,7 @@ function MachineCard({ m, status, left, flashCount, mineKind }) {
       {status === 'in_use' && (
         <>
           <span style={{ ...pill, color: 'var(--peri-ink)' }}><DrumIcon />In use</span>
+          {m.buddy && <span aria-hidden="true" style={{ position: 'absolute', top: 8, right: 8, pointerEvents: 'none' }}><Sprite mood="float" size={52} kind={m.buddy} interactive={false} /></span>}
           <div aria-hidden="true" style={{ position: 'relative', fontSize: 28, fontWeight: 700, letterSpacing: '-.03em', display: 'flex', lineHeight: 1 }}>
             <Digits value={mmss(left)} />
           </div>

@@ -53,6 +53,13 @@ export default function MachinePage() {
 
   const machine = machines.find((m) => m.id === id);
 
+  // remember this wash's buddy: shown again on the done screen, and avoided next time
+  useEffect(() => {
+    if (machine && machine.buddy && mine && mine.machine_id === id) {
+      try { localStorage.setItem('wm_last_buddy', machine.buddy); } catch {}
+    }
+  }, [machine && machine.buddy, mine]);
+
   function fire(text) { setBanner(text); beep(); buzz(); }
 
   // In-page alerts (backup): 5 min, 2 min, and time's up while this page is open.
@@ -99,6 +106,7 @@ export default function MachinePage() {
     setErr(null);
     const { error } = await supabase.rpc('start_machine', {
       p_machine: id, p_name: useName, p_room: useRoom, p_minutes: Number(minutes), p_device: getDeviceId(),
+      p_last_buddy: (() => { try { return localStorage.getItem('wm_last_buddy') || null; } catch { return null; } })(),
     });
     if (error) {
       if (/already in use/i.test(error.message)) setErr({ kind: 'grabbed' });
