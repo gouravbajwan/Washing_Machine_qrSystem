@@ -363,7 +363,7 @@ export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeF
           {onQueue && <div style={{ padding: '4px 20px 0', position: 'relative', zIndex: 3, textAlign: 'center' }}><button type="button" onClick={onQueue} style={qLink}>Waiting list{queueCount ? ` (${queueCount})` : ''}</button></div>}
         </>
       ) : (
-        <div style={{ padding: '16px 32px 0', textAlign: 'center' }}>
+        <div style={{ padding: '16px 32px 0', textAlign: 'center', position: 'relative', zIndex: 3 }}>
           <p style={{ margin: 0, fontSize: 15, lineHeight: 1.45, fontWeight: 500 }}>
             {who ? <>In use by {who}. </> : null}It will become available when the timer ends.
           </p>
