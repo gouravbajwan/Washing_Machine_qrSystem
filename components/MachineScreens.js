@@ -142,7 +142,7 @@ function RestoreSheet({ machine, onClose, onRestore }) {
 // ------------------------------------------------------------------ FREE
 export function FreeScreen({
   machine, profile, editing, name, room, onName, onRoom, dur, onDur, custom, onCustom, errors, tried, donePreview,
-  busyInfo, grabbed, genericError, onSeeFloor, onOpenBusy, onEditProfile, remindNode, onGesture, canConfirm, onBlocked, onConfirm, onReport,
+  busyInfo, grabbed, genericError, onSeeFloor, onOpenBusy, onEditProfile, remindNode, onGesture, canConfirm, onBlocked, onConfirm, onReport, queueCount, onQueue,
 }) {
   const [reporting, setReporting] = useState(false);
   const hasProfile = !!profile && !editing;
@@ -229,6 +229,7 @@ export function FreeScreen({
         <div style={{ flex: 1, minHeight: 24 }} />
         <SlideToConfirm label="Slide to start" ariaLabel="Slide to start the timer" ripColor="#8379EE" shadow={false}
           onGesture={onGesture} canConfirm={canConfirm} onBlocked={onBlocked} onConfirm={onConfirm} fallbackLabel="Tap to start instead" />
+        {onQueue && queueCount > 0 && <button type="button" onClick={onQueue} style={{ ...qLink, marginTop: 8, alignSelf: 'center' }}>Today’s waiting list ({queueCount})</button>}
         {onReport && (
           <button type="button" onClick={() => setReporting(true)} style={{ marginTop: 8, alignSelf: 'center', height: 48, padding: '0 12px', border: 0, background: 'transparent', color: 'var(--ink-2)', fontSize: 14, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}>Machine not working? Report a problem</button>
         )}
@@ -238,8 +239,82 @@ export function FreeScreen({
   );
 }
 
+
+// ------------------------------------------------------------------ QUEUE (waiting list)
+const qField = { width: '100%', height: 52, borderRadius: 16, border: '2px solid transparent', background: 'var(--field)', color: 'var(--ink)', padding: '0 14px', fontSize: 16, fontWeight: 600, outline: 'none' };
+const qLink = { height: 48, padding: '0 12px', border: 0, background: 'transparent', color: 'var(--ink)', fontSize: 14, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' };
+
+export function QueueSheet({ machine, entries, profile, canJoin, onJoin, onToggle, onLeave, onClose }) {
+  const [n, setN] = useState(profile ? profile.name : '');
+  const [r, setR] = useState(profile ? profile.room : '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const waiting = entries.filter((e) => !e.taken);
+  const pos = new Map(waiting.map((e, i) => [e.id, i + 1]));
+  const ok = n.trim().length > 0 && r.trim().length > 0;
+  async function go(fn) {
+    if (busy) return;
+    setBusy(true); setErr('');
+    const msg = await fn();
+    if (msg) setErr(msg);
+    setBusy(false);
+  }
+  return (
+    <Sheet title={`Waiting list · ${machine.name}`} text="The sign-up sheet for this machine. Tick your box once you’ve taken your clothes. Entries clear after a day, and only you can change your own row." onClose={onClose}>
+      {entries.length === 0 ? (
+        <p style={{ margin: '18px 0 4px', fontSize: 15, fontWeight: 600, textAlign: 'center', color: 'var(--ink-2)' }}>Nobody is on the list yet.</p>
+      ) : (
+        <ul style={{ listStyle: 'none', margin: '14px 0 0', padding: 0, display: 'grid', gap: 8, maxHeight: '38dvh', overflowY: 'auto' }}>
+          {entries.map((e) => (
+            <li key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 18, background: e.mine ? 'var(--lav)' : 'var(--field)', opacity: e.taken ? 0.6 : 1 }}>
+              <span aria-hidden="true" style={{ flex: 'none', width: 28, height: 28, borderRadius: 999, background: e.taken ? 'var(--mint)' : 'var(--pill-bg)', color: e.taken ? 'var(--mint-ink)' : 'var(--ink)', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 700 }}>{e.taken ? <CheckIcon /> : pos.get(e.id)}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 15, fontWeight: 600, lineHeight: 1.25, textDecoration: e.taken ? 'line-through' : 'none', overflowWrap: 'anywhere' }}>{e.user_name} · Room {e.room_no}{e.mine ? ' (you)' : ''}</span>
+                <span style={{ display: 'block', marginTop: 1, fontSize: 12, fontWeight: 500, color: 'var(--ink-2)' }}>{e.taken ? 'Clothes taken · joined' : 'Joined'} at {clockText(e.joined_at)}</span>
+              </span>
+              {e.mine ? (
+                <>
+                  <button type="button" disabled={busy} onClick={() => go(() => onToggle(e.id, !e.taken))} aria-pressed={e.taken} aria-label={e.taken ? 'Clothes taken — tap to untick' : 'Tick when you’ve taken your clothes'}
+                    style={{ flex: 'none', height: 36, padding: '0 12px', borderRadius: 999, border: 0, background: e.taken ? 'var(--mint)' : 'var(--nav)', color: e.taken ? 'var(--mint-ink)' : 'var(--nav-ink)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>{e.taken ? '✓ Taken' : 'Clothes taken?'}</button>
+                  {!e.taken && (
+                    <button type="button" disabled={busy} onClick={() => go(() => onLeave(e.id))} aria-label="Leave the waiting list"
+                      style={{ flex: 'none', width: 32, height: 32, borderRadius: 999, border: 0, background: 'var(--pill-bg)', color: 'var(--ink-2)', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>✕</button>
+                  )}
+                </>
+              ) : (
+                <span style={{ flex: 'none', fontSize: 12, fontWeight: 600, color: e.taken ? 'var(--mint-ink)' : 'var(--ink-2)' }}>{e.taken ? 'Done' : 'Waiting'}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {err && <p role="alert" style={{ margin: '12px 2px 0', fontSize: 13.5, fontWeight: 600, color: 'var(--err-ink)' }}>{err}</p>}
+      {canJoin ? (
+        <div style={{ marginTop: 16 }}>
+          {profile ? (
+            <p style={{ margin: '0 2px 10px', fontSize: 13.5, fontWeight: 500, color: 'var(--ink-2)' }}>Joining as <b>{profile.name} · Room {profile.room}</b></p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 8, marginBottom: 12 }}>
+              <input value={n} onChange={(e) => setN(e.target.value)} placeholder="Your name" aria-label="Your name" style={qField} />
+              <input value={r} onChange={(e) => setR(e.target.value)} placeholder="Room no." aria-label="Room number" style={qField} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" onClick={onClose} style={sheetBtn(false)}>Close</button>
+            <button type="button" disabled={!ok || busy} onClick={() => go(() => onJoin(n.trim(), r.trim().toUpperCase()))} className="pressable" style={sheetBtn(true, !ok || busy)}>Join the list</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', marginTop: 16 }}>
+          <button type="button" onClick={onClose} style={sheetBtn(false)}>Close</button>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 // ------------------------------------------------------------------ IN USE (own / other)
-export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeFloor, onFree, extra }) {
+export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeFloor, onFree, extra, queueCount, onQueue }) {
   const prog = total > 0 ? Math.max(0, Math.min(1, 1 - left / total)) : 0;
   const durMin = Math.max(1, Math.round((total || left) / 60));
   return (
@@ -285,6 +360,7 @@ export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeF
             </div>
           </div>
           {extra && <div style={{ padding: '12px 20px 0', position: 'relative', zIndex: 3 }}>{extra}</div>}
+          {onQueue && <div style={{ padding: '4px 20px 0', position: 'relative', zIndex: 3, textAlign: 'center' }}><button type="button" onClick={onQueue} style={qLink}>Waiting list{queueCount ? ` (${queueCount})` : ''}</button></div>}
         </>
       ) : (
         <div style={{ padding: '16px 32px 0', textAlign: 'center' }}>
@@ -292,6 +368,7 @@ export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeF
             {who ? <>In use by {who}. </> : null}It will become available when the timer ends.
           </p>
           <button type="button" onClick={onSeeFloor} style={{ marginTop: 4, height: 48, padding: '0 12px', border: 0, background: 'transparent', color: 'var(--ink)', fontSize: 14, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 3, cursor: 'pointer' }}>See everything on this floor</button>
+          {onQueue && <div><button type="button" onClick={onQueue} style={{ ...qLink, marginTop: -8 }}>{queueCount ? `Waiting list (${queueCount}) · join it` : 'Busy? Join the waiting list'}</button></div>}
         </div>
       )}
 

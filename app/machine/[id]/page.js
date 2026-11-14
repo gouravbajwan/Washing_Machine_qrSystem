@@ -9,7 +9,7 @@ import { getDeviceId } from '../../../lib/device';
 import { enablePush, syncPush, pushStatus } from '../../../lib/push';
 import { beep, buzz } from '../../../lib/alerts';
 import { getWash, setWash, clearWash } from '../../../lib/wash';
-import { LoadingScreen, MessageScreen, FreeScreen, TimerScreen, FinishedScreen, OooScreen, validateForm } from '../../../components/MachineScreens';
+import { LoadingScreen, MessageScreen, FreeScreen, TimerScreen, FinishedScreen, OooScreen, QueueSheet, validateForm } from '../../../components/MachineScreens';
 
 const note = { fontSize: 14, fontWeight: 500, lineHeight: 1.4, color: 'var(--ink-2)' };
 
@@ -32,6 +32,8 @@ export default function MachinePage() {
   const [remind, setRemind] = useState(true);
   const [banner, setBanner] = useState(null);
   const [wash, setWashState] = useState(null);
+  const [queue, setQueue] = useState([]); // waiting list for this machine (last 24 h)
+  const [queueOpen, setQueueOpen] = useState(false);
   const alertRef = useRef({ owner: false, endsAt: 0, fired: {}, done: false });
 
   useEffect(() => {
@@ -50,6 +52,12 @@ export default function MachinePage() {
     setMine(data && data[0] ? data[0] : null);
   }
   useEffect(() => { loadMine(); }, [machines]);
+
+  async function loadQueue() {
+    const { data } = await supabase.rpc('get_queue', { p_machine: id, p_device: getDeviceId() });
+    setQueue(Array.isArray(data) ? data : []);
+  }
+  useEffect(() => { loadQueue(); }, [machines]);
 
   const machine = machines.find((m) => m.id === id);
 
@@ -163,13 +171,44 @@ export default function MachinePage() {
     return null;
   }
 
+  async function doJoinQueue(n, r) {
+    const { error } = await supabase.rpc('join_queue', { p_machine: id, p_name: n, p_room: r, p_device: getDeviceId() });
+    if (error) return error.message;
+    try { localStorage.setItem('wm_name', n); localStorage.setItem('wm_room', r); } catch {}
+    if (!profile) setProfile({ name: n, room: r });
+    loadQueue();
+    return null;
+  }
+
+  async function doQueueTaken(entryId, taken) {
+    const { error } = await supabase.rpc('set_queue_taken', { p_entry: entryId, p_device: getDeviceId(), p_taken: taken });
+    if (error) return error.message;
+    loadQueue();
+    return null;
+  }
+
+  async function doLeaveQueue(entryId) {
+    const { error } = await supabase.rpc('leave_queue', { p_entry: entryId, p_device: getDeviceId() });
+    if (error) return error.message;
+    loadQueue();
+    return null;
+  }
+
   const toastBar = banner && (
     <div role="alert" style={{ position: 'fixed', top: 'max(12px, env(safe-area-inset-top))', left: 12, right: 12, zIndex: 50, maxWidth: 406, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 12px 12px 16px', borderRadius: 22, background: 'var(--nav)', color: 'var(--nav-ink)', boxShadow: 'var(--shadow)', fontSize: 14, fontWeight: 600, animation: 'toast 300ms ease-out' }}>
       <span style={{ flex: 1 }}>{banner}</span>
       <button type="button" onClick={() => setBanner(null)} style={{ height: 36, padding: '0 14px', borderRadius: 999, border: 0, background: 'rgba(255,255,255,.18)', color: 'inherit', fontWeight: 600, cursor: 'pointer' }}>OK</button>
     </div>
   );
-  const wrap = (child) => <div className="app">{toastBar}{child}</div>;
+  const queueSheet = queueOpen && machine && (
+    <QueueSheet
+      machine={machine} entries={queue}
+      profile={profile && !editing ? profile : null}
+      canJoin={live(machine, now).status === 'in_use' && !(mine && mine.machine_id === id) && !queue.some((e) => e.mine && !e.taken)}
+      onJoin={doJoinQueue} onToggle={doQueueTaken} onLeave={doLeaveQueue}
+      onClose={() => setQueueOpen(false)} />
+  );
+  const wrap = (child) => <div className="app">{toastBar}{child}{queueSheet}</div>;
 
   if (loading) return wrap(<LoadingScreen />);
   if (error) {
@@ -205,7 +244,8 @@ export default function MachinePage() {
     return wrap(
       <TimerScreen machine={machine} isOwn={isOwn} left={left} total={total} endsAtMs={machine.endsAt}
         who={machine.user_name ? `${machine.user_name} · Room ${machine.room_no}` : ''}
-        onSeeFloor={seeFloor} onFree={doFree} extra={extra} />
+        onSeeFloor={seeFloor} onFree={doFree} extra={extra}
+        queueCount={queue.filter((e) => !e.taken).length} onQueue={() => setQueueOpen(true)} />
     );
   }
 
@@ -240,6 +280,7 @@ export default function MachinePage() {
       onBlocked={() => setTried(true)}
       onConfirm={doStart}
       onReport={doReport}
+      queueCount={queue.filter((e) => !e.taken).length} onQueue={() => setQueueOpen(true)}
     />
   );
 }
