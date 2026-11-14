@@ -318,7 +318,8 @@ export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeF
   const prog = total > 0 ? Math.max(0, Math.min(1, 1 - left / total)) : 0;
   const durMin = Math.max(1, Math.round((total || left) / 60));
   return (
-    <div style={{ position: 'relative', minHeight: '100dvh', paddingBottom: 180 }}>
+    <div style={{ position: 'relative', minHeight: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, padding: topPad }}>
         <div>
           <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-.02em', lineHeight: 1.1 }}>{machine.name}</div>
@@ -371,8 +372,11 @@ export function TimerScreen({ machine, isOwn, left, total, endsAtMs, who, onSeeF
           {onQueue && <div><button type="button" onClick={onQueue} style={{ ...qLink, marginTop: -8 }}>{queueCount ? `Waiting list (${queueCount}) · join it` : 'Busy? Join the waiting list'}</button></div>}
         </div>
       )}
+      </div>
 
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+      {/* Water sits in the flow below the text (pinned to the bottom when there is room);
+          the top gap clears the sprite and % label even at full fill, so nothing overlaps. */}
+      <div style={{ marginTop: 'auto', paddingTop: 56, flexShrink: 0 }}>
         <Water height={330} level={prog} mode="active" mood="float" spriteSize={92} spriteX={isOwn ? '68%' : '50%'} label={Math.round(prog * 100) + '%'} minFill={0.3} maxFill={0.9} kind={KIND_LIST.includes(machine.buddy) ? machine.buddy : savedBuddy()} />
       </div>
       {isOwn && (
